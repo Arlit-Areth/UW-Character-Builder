@@ -208,6 +208,11 @@
     .magic-levels-row { flex-wrap: wrap; }
     .magic-level-card { min-width: 60px; }
   }
+@media print {
+  body > * { display: none !important; }
+  #print-area { display: block !important; }
+}
+#print-area { display: none; }
 </style>
 </head>
 <body>
@@ -377,7 +382,7 @@
       </div>
       <div style="display:flex;gap:8px;align-items:center">
         <button onclick="sbToggleIncants()" id="sb-incant-btn" style="padding:5px 12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-tertiary);color:var(--color-text-secondary);font-family:var(--font-sans);font-size:11px;cursor:pointer">📜 Show Incantations</button>
-        <button onclick="sbPrint()" style="padding:5px 12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-tertiary);color:var(--color-text-secondary);font-family:var(--font-sans);font-size:11px;cursor:pointer">🖨 Print / Export</button>
+        <button onclick="sbPrintSummary()" style="padding:5px 12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-tertiary);color:var(--color-text-secondary);font-family:var(--font-sans);font-size:11px;cursor:pointer">🖨 Print Spell List</button>
         <button onclick="closeSpellBuilder()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--color-text-tertiary);padding:2px 6px;line-height:1">✕</button>
       </div>
     </div>
@@ -513,6 +518,13 @@
   </div>
 </div>
 
+<!-- Spell Summary Overlay (print target only) -->
+<div id="spell-summary-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:2100;overflow-y:auto;padding:2rem 1rem">
+  <div id="spell-summary-content" style="max-width:800px;margin:0 auto;background:var(--color-background-primary);border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-lg);padding:2rem;position:relative">
+    <div id="spell-summary-body"></div>
+  </div>
+</div>
+
 <!-- Elemental Attunement Popup -->
 <div id="elemental-attunement-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:2700;align-items:center;justify-content:center;padding:1rem">
   <div style="background:var(--color-background-primary);border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-lg);padding:1.5rem;max-width:400px;width:100%">
@@ -579,51 +591,12 @@
   </div>
 </div>
 
-<!-- Admin Password Overlay -->
-<div id="admin-pw-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:4000;align-items:center;justify-content:center">
-  <div style="background:var(--color-background-primary);border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-lg);padding:2rem;width:300px;text-align:center">
-    <div style="font-size:15px;font-weight:600;margin-bottom:0.5rem">Admin Access</div>
-    <div style="font-size:12px;color:var(--color-text-secondary);margin-bottom:1.25rem">Enter password to continue</div>
-    <input id="admin-pw-input" type="password" placeholder="Password" onkeydown="if(event.key==='Enter')checkAdminPw()" autofocus
-      style="width:100%;padding:8px 12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);font-family:var(--font-sans);font-size:13px;box-sizing:border-box;margin-bottom:0.5rem">
-    <div id="admin-pw-error" style="font-size:11px;color:var(--color-text-danger);min-height:16px;margin-bottom:0.75rem"></div>
-    <div style="display:flex;gap:8px">
-      <button onclick="closeAdminPw()" style="flex:1;padding:8px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-secondary);font-family:var(--font-sans);font-size:13px;cursor:pointer">Cancel</button>
-      <button onclick="checkAdminPw()" style="flex:1;padding:8px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-primary);color:var(--color-text-primary);font-family:var(--font-sans);font-size:13px;font-weight:500;cursor:pointer">Enter</button>
-    </div>
-  </div>
-</div>
-
-<!-- Admin Overlay -->
-<div id="admin-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:3000;overflow:hidden;display:none">
-  <div style="height:100%;display:flex;flex-direction:column;max-width:1100px;margin:0 auto;padding:1.5rem 1rem">
-    <!-- Header -->
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;flex-shrink:0">
-      <div>
-        <div style="font-size:18px;font-weight:600;color:#e8e8e8">⚙ Rule Editor</div>
-        <div style="font-size:12px;color:#6b6b6b;margin-top:2px">Edit skill names, descriptions, costs and limits. Changes apply immediately to the builder.</div>
-      </div>
-      <div style="display:flex;gap:8px;align-items:center">
-        <button onclick="exportAdmin()" style="padding:7px 16px;border:0.5px solid #3b6d11;border-radius:6px;background:#173404;color:#97c459;font-family:inherit;font-size:12px;font-weight:500;cursor:pointer">⬇ Export HTML</button>
-        <button onclick="closeAdmin()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#6b6b6b;padding:4px 8px;line-height:1">✕</button>
-      </div>
-    </div>
-    <!-- Tab bar -->
-    <div id="admin-tabs" style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:1rem;flex-shrink:0"></div>
-    <!-- Search -->
-    <div style="margin-bottom:0.75rem;flex-shrink:0">
-      <input id="admin-search" type="text" placeholder="Search skills…" oninput="renderAdminSkills()" style="width:100%;padding:8px 12px;border:0.5px solid #444;border-radius:8px;background:#2a2a2a;color:#e8e8e8;font-family:inherit;font-size:13px;box-sizing:border-box">
-    </div>
-    <!-- Skill list -->
-    <div id="admin-skill-list" style="flex:1;overflow-y:auto;background:#1e1e1e;border:0.5px solid #333;border-radius:8px;padding:0.5rem"></div>
-  </div>
-</div>
 <div id="char-summary-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:2000;overflow-y:auto;padding:2rem 1rem">
   <div id="char-summary-content" style="max-width:800px;margin:0 auto;background:var(--color-background-primary);border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-lg);padding:2rem;position:relative">
     <button onclick="closeCharacterSummary()" style="position:absolute;top:1rem;right:1rem;background:none;border:none;font-size:20px;cursor:pointer;color:var(--color-text-secondary);line-height:1">✕</button>
     <div id="char-summary-body"></div>
     <div style="margin-top:2rem;padding-top:1rem;border-top:0.5px solid var(--color-border-tertiary);display:flex;gap:8px;justify-content:flex-end">
-      <button onclick="window.print()" style="padding:8px 18px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);font-family:var(--font-sans);font-size:13px;cursor:pointer">🖨 Print</button>
+      <button onclick="printCharacterSummary()" style="padding:8px 18px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);font-family:var(--font-sans);font-size:13px;cursor:pointer">🖨 Print</button>
       <button onclick="closeCharacterSummary()" style="padding:8px 18px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-primary);color:var(--color-text-primary);font-family:var(--font-sans);font-size:13px;cursor:pointer">Close</button>
     </div>
   </div>
@@ -3535,6 +3508,12 @@ function openCharacterSummary(){
   document.getElementById('char-summary-overlay').scrollTop = 0;
 }
 
+function printCharacterSummary(){
+  const html = document.getElementById('char-summary-body').innerHTML || buildSummaryHTML();
+  document.getElementById('print-area').innerHTML = html;
+  window.print();
+}
+
 function closeCharacterSummary(){
   document.getElementById('char-summary-overlay').style.display = 'none';
 }
@@ -3700,284 +3679,67 @@ function buildSummaryHTML(){
 }
 
 // ============================================================
-// ADMIN / RULE EDITOR
-// ============================================================
+// ---- Spell Summary Print ----
+function sbPrintSummary(){
+  const spheres = sbGetSpheres();
+  const charName = s.name || 'Unnamed Character';
+  const level = document.getElementById('st-level')?.textContent || '?';
+  const atts = s.elementalAttunements && s.elementalAttunements.length ? s.elementalAttunements.join(', ') : null;
 
-const ADMIN_TABS = [
-  {key:'production',   label:'Production'},
-  {key:'scholar',      label:'Scholar'},
-  {key:'warrior',      label:'Warrior'},
-  {key:'warrior_frag', label:'Warrior Frag'},
-  {key:'rogue',        label:'Rogue'},
-  {key:'rogue_frag',   label:'Rogue Frag'},
-  {key:'scholar_frag', label:'Scholar Frag'},
-  {key:'general_frag', label:'General Frag'},
-  {key:'occ',          label:'Occ Abilities'},
-  {key:'vocations',    label:'Vocations'},
-  {key:'favoured',     label:'Favoured Vocations'},
-  {key:'racial',       label:'Racial Skills'},
-  {key:'cultures',     label:'Cultures'},
-];
+  let html = `<h2 style="font-size:1.25rem;font-weight:700;color:var(--color-text-primary);margin:0 0 0.25rem">❆ Spell List — ${charName}</h2>`;
+  html += `<div style="font-size:12px;color:var(--color-text-tertiary);margin-bottom:1.5rem">Level ${level}`;
+  if(spheres.length) html += ` &middot; Spheres: ${spheres.join(', ')}`;
+  if(atts) html += ` &middot; Attunements: ${atts}`;
+  html += `</div>`;
 
-let adminTab = 'production';
-
-function getAdminItems(){
-  const results = [];
-  const addFromCat = (catName) => {
-    const cat = SKILLS.find(c=>c.cat===catName);
-    if(cat) cat.skills.forEach(sk=>results.push({sk}));
-  };
-  if(adminTab==='production')   addFromCat('Production');
-  if(adminTab==='scholar')      addFromCat('Scholar');
-  if(adminTab==='warrior')      addFromCat('Warrior');
-  if(adminTab==='warrior_frag') addFromCat('Warrior Class Frag Skills');
-  if(adminTab==='rogue')        addFromCat('Rogue');
-  if(adminTab==='rogue_frag')   addFromCat('Rogue Class Frag Skills');
-  if(adminTab==='scholar_frag') addFromCat('Scholar Class Frag Skills');
-  if(adminTab==='general_frag') addFromCat('Frag Skills');
-  if(adminTab==='occ'){
-    Object.entries(OCC_ABILITIES).forEach(([occ,abs])=>abs.forEach(ab=>results.push({sk:ab,group:occ})));
-  }
-  if(adminTab==='vocations'){
-    Object.entries(VOCATIONS).forEach(([vn,v])=>v.abilities.forEach(ab=>results.push({sk:ab,group:vn})));
-  }
-  if(adminTab==='favoured'){
-    Object.entries(FAVOURED_VOCATIONS).forEach(([vn,v])=>v.abilities.forEach(ab=>results.push({sk:ab,group:vn})));
-  }
-  if(adminTab==='racial'){
-    const all = {...RACES,...FRAG_RACES};
-    Object.entries(all).forEach(([rn,rd])=>{
-      (rd.auto||[]).forEach(sk=>results.push({sk,group:rn+' (auto)'}));
-      (rd.purchased||[]).forEach(sk=>results.push({sk,group:rn}));
-    });
-  }
-  if(adminTab==='cultures'){
-    Object.entries(CULTURES).forEach(([cn,cd])=>(cd.purchased||[]).forEach(sk=>results.push({sk,group:cn})));
-  }
-  return results;
-}
-
-function renderAdminTabs(){
-  const bar = document.getElementById('admin-tabs');
-  bar.innerHTML = ADMIN_TABS.map(t=>{
-    const active = adminTab===t.key;
-    return `<button onclick="adminTab='${t.key}';renderAdminTabs();renderAdminSkills()"
-      style="padding:6px 14px;border-radius:6px;border:0.5px solid ${active?'#6b8cff':'#444'};background:${active?'#1a2a4a':'#2a2a2a'};color:${active?'#85b7eb':'#a0a0a0'};font-size:12px;font-weight:500;cursor:pointer;font-family:inherit;white-space:nowrap">${t.label}</button>`;
-  }).join('');
-}
-
-function renderAdminSkills(){
-  const list = document.getElementById('admin-skill-list');
-  const query = (document.getElementById('admin-search').value||'').toLowerCase().trim();
-  let items = getAdminItems();
-  if(query) items = items.filter(({sk,group})=>
-    (sk.name||'').toLowerCase().includes(query)||(group||'').toLowerCase().includes(query)
-  );
-  if(!items.length){ list.innerHTML=`<div style="padding:2rem;text-align:center;color:#6b6b6b;font-size:13px">No skills found</div>`; return; }
-
-  window._adminMap = {};
-  const isFixed = ['warrior_frag','rogue_frag','scholar_frag','general_frag'].includes(adminTab);
-  const isOccCosts = ['production','scholar','warrior','rogue'].includes(adminTab);
-  const isAbility = ['occ','vocations','favoured'].includes(adminTab);
-
-  // Group by group label
-  const groups = {};
-  items.forEach((item,i)=>{
-    const uid = 'a'+i;
-    window._adminMap[uid] = item.sk;
-    item._uid = uid;
-    const g = item.group||'';
-    if(!groups[g]) groups[g]=[];
-    groups[g].push(item);
-  });
-
-  const multiGroup = Object.keys(groups).length>1;
-  let html='';
-
-  Object.entries(groups).forEach(([gName,gitems])=>{
-    if(multiGroup&&gName) html+=`<div style="font-size:10px;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:0.7px;padding:10px 10px 3px">${gName}</div>`;
-    gitems.forEach(({sk,_uid})=>{
-      const hasMax = sk.maxPurchases!==undefined;
-      html+=`<div style="background:#242424;border:0.5px solid #333;border-radius:6px;margin-bottom:5px;padding:10px 12px">
-        <div style="display:flex;gap:8px;align-items:center;margin-bottom:7px;flex-wrap:wrap">
-          <input value="${ea(sk.name)}" onchange="aSet('${_uid}','name',this.value);render()"
-            style="flex:1;min-width:150px;background:#1a1a1a;border:0.5px solid #555;border-radius:4px;padding:5px 8px;color:#e8e8e8;font-size:13px;font-weight:600;font-family:inherit">
-          ${hasMax?`<label style="font-size:11px;color:#888;display:flex;align-items:center;gap:4px">Max purchases:<input type="number" min="1" max="99" value="${sk.maxPurchases}" onchange="aSet('${_uid}','maxPurchases',+this.value);render()" style="width:52px;background:#1a1a1a;border:0.5px solid #555;border-radius:4px;padding:4px 6px;color:#e8e8e8;font-size:12px;font-family:inherit;text-align:center"></label>`:''}
-        </div>
-        ${isOccCosts&&sk.costs?`<div style="margin-bottom:7px">
-          <div style="font-size:10px;color:#666;margin-bottom:4px">CP Cost per occupation (M R T N A W Mg Dr Ba):</div>
-          <div style="display:flex;flex-wrap:wrap;gap:4px">
-            ${OCC_ORDER.map((occ,i)=>`<label style="display:flex;flex-direction:column;align-items:center;gap:2px;font-size:9px;color:#666">
-              ${occ.substring(0,4)}<input type="number" min="0" value="${sk.costs[i]}" onchange="aCost('${_uid}',${i},+this.value);render()"
-              style="width:42px;background:#1a1a1a;border:0.5px solid #555;border-radius:4px;padding:3px 4px;color:#e8e8e8;font-size:11px;font-family:inherit;text-align:center">
-            </label>`).join('')}
-          </div>
-        </div>`:''}
-        ${isFixed?`<div style="display:flex;gap:12px;margin-bottom:7px">
-          <label style="font-size:11px;color:#888;display:flex;align-items:center;gap:4px">Frag cost:<input type="number" min="0" value="${sk.frag||0}" onchange="aSet('${_uid}','frag',+this.value);render()" style="width:60px;background:#1a1a1a;border:0.5px solid #555;border-radius:4px;padding:4px 6px;color:#e8e8e8;font-size:12px;font-family:inherit;text-align:center"></label>
-          <label style="font-size:11px;color:#888;display:flex;align-items:center;gap:4px">CP cost:<input type="number" min="0" value="${sk.cp||0}" onchange="aSet('${_uid}','cp',+this.value);render()" style="width:60px;background:#1a1a1a;border:0.5px solid #555;border-radius:4px;padding:4px 6px;color:#e8e8e8;font-size:12px;font-family:inherit;text-align:center"></label>
-        </div>`:''}
-        ${isAbility?`<div style="margin-bottom:7px"><label style="font-size:11px;color:#888;display:flex;align-items:center;gap:4px">CP cost:<input type="number" min="0" value="${sk.cp||0}" onchange="aSet('${_uid}','cp',+this.value);render()" style="width:60px;background:#1a1a1a;border:0.5px solid #555;border-radius:4px;padding:4px 6px;color:#e8e8e8;font-size:12px;font-family:inherit;text-align:center"></label></div>`:''}
-        <textarea rows="3" onchange="aSet('${_uid}','desc',this.value)"
-          style="width:100%;background:#1a1a1a;border:0.5px solid #444;border-radius:4px;padding:6px 8px;color:#b0b0b0;font-size:12px;font-family:inherit;resize:vertical;box-sizing:border-box;line-height:1.5">${ea(sk.desc||'')}</textarea>
-      </div>`;
-    });
-  });
-
-  list.innerHTML = html;
-}
-
-function ea(s){ return (s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-function aSet(uid,field,val){ const sk=window._adminMap&&window._adminMap[uid]; if(sk) sk[field]=val; }
-function aCost(uid,idx,val){ const sk=window._adminMap&&window._adminMap[uid]; if(sk&&sk.costs) sk.costs[idx]=val; }
-
-function promptAdmin(){
-  const ov = document.getElementById('admin-pw-overlay');
-  ov.style.display = 'flex';
-  const inp = document.getElementById('admin-pw-input');
-  inp.value = '';
-  document.getElementById('admin-pw-error').textContent = '';
-  setTimeout(()=>inp.focus(), 50);
-}
-
-function checkAdminPw(){
-  const val = document.getElementById('admin-pw-input').value;
-  if(val === 'pithlit'){
-    closeAdminPw();
-    openAdmin();
+  if(!spheres.length){
+    html += `<p style="color:var(--color-text-tertiary);font-style:italic">No spheres of magic selected.</p>`;
   } else {
-    document.getElementById('admin-pw-error').textContent = 'Incorrect password.';
-    document.getElementById('admin-pw-input').value = '';
-    document.getElementById('admin-pw-input').focus();
+    let hasAny = false;
+    for(let lvl=1; lvl<=9; lvl++){
+      const count = sbGetSlotCount(lvl);
+      if(!count) continue;
+      hasAny = true;
+      html += `<div style="margin-bottom:1.25rem">`;
+      html += `<div style="font-size:13px;font-weight:700;color:var(--color-text-warning, #c9a84c);border-bottom:0.5px solid var(--color-border-tertiary);padding-bottom:4px;margin-bottom:8px">${ordinal(lvl)} Circle — ${count} slot${count!==1?'s':''}</div>`;
+      html += `<table style="width:100%;border-collapse:collapse;font-size:12px">`;
+      html += `<colgroup><col style="width:32px"><col style="width:38%"><col><col style="width:28%"></colgroup>`;
+      html += `<thead><tr style="color:var(--color-text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px">
+        <th style="text-align:center;padding:3px 6px">#</th>
+        <th style="text-align:left;padding:3px 6px">Spell</th>
+        <th style="text-align:left;padding:3px 6px">Incantation</th>
+        <th style="text-align:left;padding:3px 6px">Sphere</th>
+      </tr></thead><tbody>`;
+      for(let slot=1; slot<=count; slot++){
+        const val = sbSelections[lvl+'-'+slot];
+        let spellName = '<span style="color:var(--color-text-tertiary);font-style:italic">unassigned</span>';
+        let incant = '';
+        let sphere = '';
+        if(val){
+          const parts = val.split('|');
+          const sp = SB_SPELLS.find(x=>x.sphere===parts[0]&&x.name===parts[1]&&x.level===lvl);
+          if(sp){
+            spellName = sp.name;
+            incant = sbResolveIncant(sp);
+            sphere = sp.sphere;
+          }
+        }
+        const bg = slot%2===0 ? 'background:var(--color-background-secondary)' : '';
+        html += `<tr style="${bg}">
+          <td style="text-align:center;padding:5px 6px;color:var(--color-text-tertiary)">${slot}</td>
+          <td style="padding:5px 6px;color:var(--color-text-primary);font-weight:500">${spellName}</td>
+          <td style="padding:5px 6px;color:var(--color-text-secondary);font-style:italic">${incant}</td>
+          <td style="padding:5px 6px;color:var(--color-text-tertiary)">${sphere}</td>
+        </tr>`;
+      }
+      html += `</tbody></table></div>`;
+    }
+    if(!hasAny) html += `<p style="color:var(--color-text-tertiary);font-style:italic">No spell slots purchased.</p>`;
   }
-}
 
-function closeAdminPw(){
-  document.getElementById('admin-pw-overlay').style.display = 'none';
-}
-
-// ---- Bug report ----
-function captureBugState(){
-  const owned = s.owned.filter(o=>!o._auto);
-  const skills = owned.map(o=>`  - ${o.name} (${o.cp||0} CP, ${o.frag||0} frag)`).join('\n');
-  const level  = document.getElementById('st-level')?.textContent  || '?';
-  const body   = document.getElementById('st-body')?.textContent   || '?';
-  const str    = document.getElementById('st-str')?.textContent    || '?';
-  const cpTot  = document.getElementById('st-cptotal')?.textContent|| '?';
-  const cpSpent= document.getElementById('st-cpspent')?.textContent|| '?';
-  const frags  = document.getElementById('st-frags')?.textContent  || '?';
-  const stats  = `Level ${level} | Body ${body} | Strength ${str} | CP Total ${cpTot} | CP Spent ${cpSpent} | Frags ${frags}`;
-  const spells = s.owned.filter(o=>o._spellSlot).map(o=>o.name).join(', ') || 'None';
-  const spheres = [s.s_school_1, s.s_school_2, s.s_school_3].filter(Boolean).join(', ') || 'None';
-
-  return [
-    `**Character State**`,
-    `Name: ${s.name||'(unnamed)'}`,
-    `Race: ${s.race||'(none)'} | Culture: ${s.culture||'(none)'}`,
-    `Occupation: ${s.occupation||'(none)'} | Vocation: ${s.vocation||'(none)'}`,
-    `Blankets: ${s.blankets}`,
-    `Stats: ${stats}`,
-    `Magic Spheres: ${spheres}`,
-    `Spell Slots: ${spells}`,
-    `Skills Purchased (${owned.length}):`,
-    skills || '  (none)',
-    ``,
-    `**Date:** ${new Date().toISOString().split('T')[0]}`,
-  ].join('\n');
-}
-
-function openBugReport(){
-  document.getElementById('bug-description').value = '';
-  document.getElementById('bug-status').textContent = '';
-  document.getElementById('bug-state-preview').textContent = captureBugState();
-  const btn = document.getElementById('bug-submit-btn');
-  btn.disabled = false;
-  btn.textContent = 'Submit Report';
-  document.getElementById('bug-overlay').style.display = 'flex';
-  setTimeout(()=>document.getElementById('bug-description').focus(), 50);
-}
-
-function closeBugReport(){
-  document.getElementById('bug-overlay').style.display = 'none';
-}
-
-async function submitBugReport(){
-  const desc = document.getElementById('bug-description').value.trim();
-  if(!desc){
-    document.getElementById('bug-status').innerHTML = '<span style="color:var(--color-text-danger)">Please enter a description.</span>';
-    return;
-  }
-  const btn = document.getElementById('bug-submit-btn');
-  btn.disabled = true;
-  btn.textContent = 'Opening GitHub…';
-
-  const state = captureBugState();
-  const body = `## Bug Description\n${desc}\n\n---\n\n${state}`;
-  const title = desc.length > 60 ? desc.substring(0,57)+'…' : desc;
-
-  // GitHub requires auth for API calls from the browser — open pre-filled issue page directly
-  const base = 'https://github.com/Arlit-Areth/UW-Character-Builder/issues/new';
-  const fullUrl = `${base}?title=${encodeURIComponent('[Bug] '+title)}&body=${encodeURIComponent(body)}&labels=bug`;
-  // GitHub URLs have an ~8000 char limit — truncate body if needed
-  const url = fullUrl.length <= 8000 ? fullUrl : `${base}?title=${encodeURIComponent('[Bug] '+title)}&labels=bug`;
-  window.open(url, '_blank');
-
-  document.getElementById('bug-status').innerHTML =
-    '<span style="color:var(--color-text-success)">✓ GitHub opened — review and click "Submit new issue".</span>';
-  btn.textContent = '✓ Opened GitHub';
-}
-
-
-function resetCharacter(){
-  if(!confirm('Reset all character selections? This cannot be undone.')) return;
-  s = { name:'', race:'', culture:'', occupation:'', vocation:'', blankets:0, owned:[], openCats:{General:false, 'Frag Skills':false, Production:false, Scholar:false, 'Scholar Class Frag Skills':false, Warrior:false, 'Warrior Class Frag Skills':false, Rogue:false, 'Rogue Class Frag Skills':false, Racial:false}, hovered:null, s_school_1:'', s_school_2:'', s_school_3:'', elementalAttunements:[] };
-  magicOpen = false;
-  _paragonCat = null; _paragonSi = null; _paragonSphere = null;
-  window._vocFlexState = {};
-  // Reset all dropdowns
-  ['sel-race','sel-culture','sel-occ','sel-voc'].forEach(id=>{
-    const el = document.getElementById(id);
-    if(el) el.value = '';
-  });
-  // Reset culture dropdown to empty
-  const selCulture = document.getElementById('sel-culture');
-  if(selCulture) selCulture.innerHTML = '<option value="">— select —</option>';
-  // Reset name
-  const nameEl = document.getElementById('char-name');
-  if(nameEl) nameEl.value = '';
-  // Reset blankets
-  const blanketsEl = document.getElementById('blankets-input');
-  if(blanketsEl) blanketsEl.value = '0';
-  // Reset detail panel
-  const detail = document.getElementById('detail-panel');
-  if(detail) detail.innerHTML = '<div class="detail-empty">Hover a skill to see details</div>';
-  render();
-}
-
-function openAdmin(){
-  const ov=document.getElementById('admin-overlay');
-  ov.style.display='flex';
-  renderAdminTabs();
-  renderAdminSkills();
-}
-function closeAdmin(){ document.getElementById('admin-overlay').style.display='none'; }
-
-function exportAdmin(){
-  // Grab the current page HTML — this captures all in-memory JS mutations since
-  // the data objects (SKILLS, VOCATIONS, etc.) are live references in the script.
-  // We snapshot the full document and trigger a download.
-  const html = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
-  const blob = new Blob([html], {type:'text/html;charset=utf-8'});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  const d = new Date();
-  const stamp = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-  a.download = `larp-character-builder-${stamp}.html`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  document.getElementById('spell-summary-body').innerHTML = html;
+  document.getElementById('print-area').innerHTML = html;
+  window.print();
 }
 
 // ============================================================
@@ -4458,49 +4220,9 @@ function sbUpdateSummary(){
   grid.innerHTML = html;
 }
 
-function sbPrint(){
-  const spheres = sbGetSpheres();
-  const charName = s.name || 'Unnamed Character';
-  const level = document.getElementById('st-level')?.textContent || '?';
-
-  let rows = '';
-  for(let lvl=1; lvl<=9; lvl++){
-    const count = sbGetSlotCount(lvl);
-    if(!count) continue;
-    rows += `<tr style="background:#1a1a2e"><td colspan="3" style="padding:6px 12px;font-weight:700;color:#c9a84c;font-size:13px;border-top:2px solid #0f3460">${ordinal(lvl)} Circle — ${count} slot${count!==1?'s':''}</td></tr>`;
-    for(let slot=1; slot<=count; slot++){
-      const val = sbSelections[lvl+'-'+slot];
-      let spellName = '—', sphere = '', incant = '';
-      if(val){
-        const parts = val.split('|');
-        const sp = SB_SPELLS.find(x=>x.sphere===parts[0]&&x.name===parts[1]&&x.level===lvl);
-        if(sp){ spellName=sp.name; sphere=sp.sphere; incant=sp.incant; }
-      }
-      rows += `<tr style="border-bottom:1px solid #0f346040"><td style="padding:5px 12px;color:#888;text-align:center;width:40px">${slot}</td><td style="padding:5px 12px;color:#e0e0e0">${spellName}${sphere?` <span style="color:#b8a060;font-size:11px">[${sphere}]</span>`:''}</td><td style="padding:5px 12px;color:#b8a060;font-size:11px;font-style:italic">${incant}</td></tr>`;
-    }
-  }
-
-  const printHTML = [
-    '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Spell List — '+charName+'</title>',
-    '<style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Segoe UI,sans-serif;background:#1a1a2e;color:#e0e0e0;padding:24px}h1{color:#c9a84c;font-size:1.4rem;margin-bottom:4px}p{color:#888;font-size:12px;margin-bottom:20px}table{width:100%;border-collapse:collapse;background:#16213e;border:1px solid #0f3460;border-radius:8px;overflow:hidden}thead th{background:#0f3460;color:#c9a84c;padding:10px 12px;font-size:11px;text-transform:uppercase;letter-spacing:1px;text-align:left}@media print{body{background:#fff;color:#000}table{border-color:#ccc}thead th{background:#f0f0f0;color:#000}}</style>',
-    '</head><body>',
-    '<h1>&#10022; Spell List &#8212; '+charName+'</h1>',
-    '<p>Level '+level+' &middot; Spheres: '+(spheres.join(', ')||'None')+'</p>',
-    '<table><thead><tr><th style="width:40px">Slot</th><th>Spell</th><th>Incantation</th></tr></thead><tbody>'+rows+'</tbody></table>',
-    '</body></html>'
-  ].join('');
-  const blob = new Blob([printHTML], {type:'text/html'});
-  const url = URL.createObjectURL(blob);
-  const win = window.open(url, '_blank');
-  setTimeout(()=>URL.revokeObjectURL(url), 10000);
-}
-
 render();
 </script>
 
-<!-- Bottom admin button -->
-<div style="text-align:center;padding:12px 0 20px;opacity:0.4;transition:opacity 0.2s" onmouseenter="this.style.opacity='1'" onmouseleave="this.style.opacity='0.4'">
-  <button onclick="promptAdmin()" style="padding:4px 12px;border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);background:transparent;color:var(--color-text-tertiary);font-family:var(--font-sans);font-size:10px;font-weight:500;cursor:pointer;letter-spacing:0.3px">⚙ Admin</button>
-</div>
+<div id="print-area"></div>
 </body>
 </html>
