@@ -2,6 +2,20 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<script>
+  // Unregister any service workers and clear all caches on load
+  if('serviceWorker' in navigator){
+    navigator.serviceWorker.getRegistrations().then(regs=>{
+      regs.forEach(r=>r.unregister());
+    });
+  }
+  if('caches' in window){
+    caches.keys().then(keys=>keys.forEach(k=>caches.delete(k)));
+  }
+</script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>LARP Character Builder</title>
 <style>
@@ -4365,19 +4379,4 @@ function resetCharacter(){
   // Reset all input elements
   const nm = document.getElementById('inp-name'); if(nm) nm.value = '';
   const bl = document.getElementById('inp-blankets'); if(bl) bl.value = '0';
-  const rc = document.getElementById('sel-race'); if(rc) rc.value = '';
-  const cu = document.getElementById('sel-culture'); if(cu) cu.value = '';
-  const oc = document.getElementById('sel-occ'); if(oc) oc.value = '';
-  const vo = document.getElementById('sel-voc'); if(vo) vo.value = '';
-  // Reset detail panel
-  const detail = document.getElementById('detail-panel');
-  if(detail) detail.innerHTML = '<div class="detail-empty">Hover a skill to see details</div>';
-  render();
-}
-
-render();
-</script>
-
-<div id="print-area"></div>
-</body>
-</html>
+  const rc = document.getElementById('sel-race'); if(rc
