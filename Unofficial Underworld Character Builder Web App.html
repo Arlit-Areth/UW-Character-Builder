@@ -1497,10 +1497,35 @@ function removeSphere(num){
 
 function doRemoveSphere(num){
   const names = ['Sphere of Magic: 1st','Sphere of Magic: 2nd','Sphere of Magic: 3rd'];
-  if(num<=1){ s.owned=s.owned.filter(o=>!o._spellSlot); s.owned=s.owned.filter(o=>!o._ritualSlot); s['s_school_1']=''; }
-  if(num<=2){ s.owned=s.owned.filter(o=>o.name!=='Sphere of Magic: 3rd'||!o._spherePurchase); s['s_school_2']=''; }
-  if(num<=3){ s['s_school_3']=''; }
-  s.owned=s.owned.filter(o=>!(o.name===names[num-1]&&o._spherePurchase));
+  if(num<=1){
+    s.owned = s.owned.filter(o=>!o._spellSlot);
+    s.owned = s.owned.filter(o=>!o._ritualSlot);
+    // Clear elemental attunements if Elemental was a selected school
+    if(s['s_school_1']==='Elemental'||s['s_school_2']==='Elemental'||s['s_school_3']==='Elemental'){
+      s.owned = s.owned.filter(o=>!o._elementalAttunement);
+      s.elementalAttunements = [];
+    }
+    s['s_school_1']='';
+  }
+  if(num<=2){
+    // Remove sphere 3 purchase when sphere 2 is removed
+    s.owned = s.owned.filter(o=>!(o.name==='Sphere of Magic: 3rd' && o._spherePurchase));
+    // Clear elemental attunements if Elemental was school 2 or 3
+    if(s['s_school_2']==='Elemental'||s['s_school_3']==='Elemental'){
+      s.owned = s.owned.filter(o=>!o._elementalAttunement);
+      s.elementalAttunements = [];
+    }
+    s['s_school_2']='';
+  }
+  if(num<=3){
+    // Clear elemental attunements if Elemental was school 3
+    if(s['s_school_3']==='Elemental'){
+      s.owned = s.owned.filter(o=>!o._elementalAttunement);
+      s.elementalAttunements = [];
+    }
+    s['s_school_3']='';
+  }
+  s.owned = s.owned.filter(o=>!(o.name===names[num-1] && o._spherePurchase));
   render();
 }
 
@@ -1838,10 +1863,10 @@ const VOCATIONS = {
 
 // Weapon types organized by proficiency group
 const WEAPON_TYPES = {
-  simple: ['Dagger/Knife','2-Handed Staff','Club','Thrown Weapon','Fist'],
-  medium: ['Sword (1H)','Mace/Hammer (1H)','Spear (1H)','Axe (1H)','Bow/Arrow','Claw'],
-  large:  ['Great Sword (2H)','Polearm (2H)','Axe (2H)','Crossbow/Bolt (2H)','Mace/Hammer (2H)'],
-  exotic: ['Stiletto','Maul (2H)','Bastard Sword (1H or 2H)'],
+  simple: ['Dagger/Knife','2-Handed Staff','Club','Thrown Weapon'],
+  medium: ['Sword (1H)','Mace/Hammer (1H)','Spear (1H)','Axe (1H)','Bow','Claw'],
+  large:  ['Great Sword (2H)','Polearm (2H)','Axe (2H)','Crossbow','Mace/Hammer (2H)'],
+  exotic: ['Stiletto','Maul (2H)','Bastard Sword','Summoned Weapon'],
 };
 
 // Skills that require a specific weapon type to be chosen on purchase
@@ -1855,12 +1880,17 @@ const WEAPON_CHOICE_SKILLS = new Set([
 
 // Get all weapon types the character is currently proficient with
 function getOwnedWeaponTypes(){
-  const types = [...WEAPON_TYPES.simple]; // Simple is always auto-granted
+  const types = [...WEAPON_TYPES.simple]; // Simple always auto-granted
   if(getPurchaseCount('Weapon Group Proficiency: Medium')>0) types.push(...WEAPON_TYPES.medium);
   if(getPurchaseCount('Weapon Group Proficiency: Large')>0)  types.push(...WEAPON_TYPES.large);
-  // Exotic: each purchase = one exotic weapon
+  // Each Exotic Proficiency purchase grants one specific exotic weapon (tracked via _weaponType)
+  const exoticOwned = s.owned
+    .filter(o=>(o._baseSkillName||o.name)==='Weapon Specific Proficiency: Exotic' && o._weaponType)
+    .map(o=>o._weaponType);
+  exoticOwned.forEach(w=>{ if(!types.includes(w)) types.push(w); });
+  // Fallback: if exotic purchased but no weapon type recorded, add all exotic
   const exoticCount = getPurchaseCount('Weapon Specific Proficiency: Exotic');
-  if(exoticCount>0) types.push(...WEAPON_TYPES.exotic.slice(0,exoticCount));
+  if(exoticCount>0 && exoticOwned.length===0) types.push(...WEAPON_TYPES.exotic);
   return types;
 }
 
@@ -2294,33 +2324,63 @@ let _wcCat = null, _wcSi = null, _wcSk = null;
 
 function openWeaponChoicePopup(cat, si, sk){
   _wcCat = cat; _wcSi = si; _wcSk = sk;
-  const weaponTypes = getOwnedWeaponTypes();
   document.getElementById('weapon-choice-title').textContent = sk.name;
-  document.getElementById('weapon-choice-subtitle').textContent =
-    `Choose the specific weapon type for this purchase. Only weapons you are proficient with are shown.`;
 
   const sel = document.getElementById('weapon-choice-sel');
-  sel.innerHTML = '<option value="">— select weapon —</option>';
+  sel.innerHTML = '<option value="">— select —</option>';
 
-  // Group weapons by proficiency for readability
-  const groups = [
-    {label:'Simple', weapons: WEAPON_TYPES.simple},
-    {label:'Medium', weapons: WEAPON_TYPES.medium},
-    {label:'Large',  weapons: WEAPON_TYPES.large},
-    {label:'Exotic', weapons: WEAPON_TYPES.exotic},
-  ];
-  groups.forEach(({label, weapons})=>{
-    const owned = weapons.filter(w=>weaponTypes.includes(w));
-    if(!owned.length) return;
-    const grp = document.createElement('optgroup');
-    grp.label = label;
-    owned.forEach(w=>{
+  if(sk._weaponChoice === 'exotic'){
+    // Exotic proficiency: choose one exotic weapon not yet owned
+    document.getElementById('weapon-choice-subtitle').textContent =
+      'Choose an exotic weapon to become proficient with.';
+    const alreadyOwned = s.owned
+      .filter(o=>(o._baseSkillName||o.name)==='Weapon Specific Proficiency: Exotic' && o._weaponType)
+      .map(o=>o._weaponType);
+    WEAPON_TYPES.exotic.forEach(w=>{
       const opt = document.createElement('option');
       opt.value = w; opt.textContent = w;
-      grp.appendChild(opt);
+      if(alreadyOwned.includes(w)) opt.disabled = true;
+      sel.appendChild(opt);
     });
-    sel.appendChild(grp);
-  });
+
+  } else if(sk._weaponChoice === 'group'){
+    // Group skills: offer only group names the character owns
+    document.getElementById('weapon-choice-subtitle').textContent =
+      'Choose the weapon group for this purchase. Only groups you are proficient with are shown.';
+    const available = getAvailableWeaponGroups();
+    available.forEach(g => {
+      const opt = document.createElement('option');
+      opt.value = g; opt.textContent = g;
+      sel.appendChild(opt);
+    });
+
+  } else {
+    // Specific skills: offer individual weapons from owned groups
+    // Exotic weapons (Stiletto, Maul, Bastard Sword) are available to all specific skills
+    // Summoned Weapon is ONLY available for Specialization +1: Weapon Specific
+    const allowSummoned = sk.name === 'Specialization +1: Weapon Specific';
+    document.getElementById('weapon-choice-subtitle').textContent =
+      'Choose the specific weapon type for this purchase. Only weapons you are proficient with are shown.';
+    const weaponTypes = getOwnedWeaponTypes();
+    const groups = [
+      {label:'Simple', weapons: WEAPON_TYPES.simple},
+      {label:'Medium', weapons: WEAPON_TYPES.medium},
+      {label:'Large',  weapons: WEAPON_TYPES.large},
+      {label:'Exotic', weapons: WEAPON_TYPES.exotic.filter(w => w !== 'Summoned Weapon' || allowSummoned)},
+    ];
+    groups.forEach(({label, weapons}) => {
+      const owned = weapons.filter(w => weaponTypes.includes(w));
+      if(!owned.length) return;
+      const grp = document.createElement('optgroup');
+      grp.label = label;
+      owned.forEach(w => {
+        const opt = document.createElement('option');
+        opt.value = w; opt.textContent = w;
+        grp.appendChild(opt);
+      });
+      sel.appendChild(grp);
+    });
+  }
 
   weaponChoiceUpdateBtn();
   document.getElementById('weapon-choice-overlay').style.display = 'flex';
@@ -2365,10 +2425,10 @@ function closeWeaponChoicePopup(){
 
 // ---- Weapon data ----
 const WEAPON_GROUPS = {
-  Simple:  ['Dagger/Knife','2-Handed Staff','Club','Thrown Weapon','Fist'],
-  Medium:  ['Sword (1H)','1-Handed Mace/Hammer','1-Handed Spear','1-Handed Axe','Arrow','Claw'],
-  Large:   ['2-Handed Great Sword','2-Handed Polearm','2-Handed Axe','Bolt (Crossbow)','2-Handed Mace/Hammer'],
-  Exotic:  ['Stiletto','2-Handed Maul','Bastard Sword'],
+  Simple:  ['Dagger/Knife','2-Handed Staff','Club','Thrown Weapon'],
+  Medium:  ['Sword (1H)','Mace/Hammer (1H)','Spear (1H)','Axe (1H)','Bow','Claw'],
+  Large:   ['Great Sword (2H)','Polearm (2H)','Axe (2H)','Crossbow','Mace/Hammer (2H)'],
+  Exotic:  ['Stiletto','Maul (2H)','Bastard Sword','Summoned Weapon'],
 };
 
 function getAvailableWeapons(){
@@ -2384,7 +2444,7 @@ function getAvailableWeapons(){
 }
 
 function getAvailableWeaponGroups(){
-  const groups = [];
+  const groups = ['Simple'];
   if(getPurchaseCount('Weapon Group Proficiency: Medium')>0) groups.push('Medium');
   if(getPurchaseCount('Weapon Group Proficiency: Large')>0) groups.push('Large');
   return groups;
@@ -2549,7 +2609,7 @@ const SKILLS = [
     skill('Anatomy',                [40,40,40,40,40,40,40,40,35], [], {max:1, desc:'This skill allows a user to check an individual\'s vital signs. Anatomy can be used on any living creature to glean information about their health and physical state. To use Anatomy, the player must place both hands on the torso of the target, call out "Anatomy 1, Anatomy 2, Anatomy 3", and then ask the player, out of game, one of the following questions: "Are you alive?", "Are you in your bleed count?", "Are you in your death count?", "Are you paralysed?", "Are you asleep?", "Are you unconscious?", "Is there alcohol in your system?", "Is there a toxin in your system?", "Is there a non-Magical disease in your system?" and "How much damage have you taken?" This skill is usable at will.'}),
     skill('Mysticism',              [50,50,50,50,50,50,50,50,50], [], {desc:'The art of the Mystic is one that has both amazed and frightened the unaware since the dawn of time. A Mystic excels in the contacting of lost spirits or ghosts to ask for, coerce, steal, or outright force their aid. Mysticism skills must be purchased in order of level and no level may be purchased more than once. A Mystic who finds themselves close to final death finds themselves with easier access to the Deadlands — if a Mystic has no free deaths left on their character card, they will be given two additional uses of any one skill of their choice that they have purchased. Level 1: Dead Sight — view lost souls and ghosts normally invisible to the mundane eye. Level 2: Augury — consult with Spirits via a medium of their choosing. Level 3: Eyes of the Soul — touch a corpse to attempt to lure the Spirit into retelling how it died (1 in 10 chance, costs 1 hour of blindness). Level 4: Foresight — implant subconscious foresight of upcoming danger into a target. Level 5: Manifest — rise as a visible spirit during Death Count. Level 6: Grim Counsel — speak directly to spirits and ghosts; combine with Augury to target a specific spirit. Level 7: Séance — gather Mystics to summon a specific spirit to answer 3 questions. Level 8: Unfetter — Manifest without the 10-foot restriction, remaining within line-of-sight. Level 9: Haunt — attempt to have a spirit choose a home as their connection to the mortal realm. Level 10: Betwixt and Between — immunity to Forget effects, 50% chance to remember deaths, doubles Death Count while Manifesting with a lantern.'}),
     skill('Demonic/Angelic Arts',   [75,75,60,75,75,60,55,60,50], [], {max:1, desc:'Demonic/Angelic Arts allow the user to identify and recognize the various holy and unholy creatures that exist on all the planes of the Heavens and Hells. This skill may only be used to answer the following questions: "Are you a Demonic/Angelic creature?", "What kind of Demon/Angel are you?", "Are you a greater or lesser Demon/Angel?", (Angelic only) "Which God do you serve, if any?", (Demonic only) "Are you currently under contract?" These questions are asked out of game, not to the Demon or Angel directly. Characters with Demonic/Angelic Arts take 2 less damage (to a minimum of 1) from attacks by their identified target no matter the type of attack. Only one target may be active at a time. To change targets, the user may ask one of the questions above, or simply state "Demonic/Angelic Arts 1, 2, 3" if the new target has already been identified.'}),
-    skill('Elemental Attunement',   [25,25,25,25,25,25,25,25,25], [{name:'Sphere of Magic: 1st',minCount:1}], {desc:'This skill will allow an Elementalist to attune themselves to an additional Element. This additional attunement may be chosen when casting spells that require one. Example: A Fire Elementalist may purchase Elemental Attunement and choose Ice. The Elementalist can now choose between Ice or Fire when casting spells that require an Elemental type such as "<type> Strike." This skill can be purchased multiple times to grant access to additional Elements. The four elements are Fire, Ice, Stone and Lightning.'}),
+    skill('Elemental Attunement',   [25,25,25,25,25,25,25,25,25], [{name:'Sphere of Magic: 1st',minCount:1}], {max:3, desc:'This skill will allow an Elementalist to attune themselves to an additional Element. This additional attunement may be chosen when casting spells that require one. Example: A Fire Elementalist may purchase Elemental Attunement and choose Ice. The Elementalist can now choose between Ice or Fire when casting spells that require an Elemental type such as "<type> Strike." This skill can be purchased multiple times to grant access to additional Elements. The four elements are Fire, Ice, Stone and Lightning.'}),
     skill('First Aid',              [60,60,60,60,60,60,60,60,55], [{name:'Anatomy',minCount:1}], {max:1, desc:'Allows the user to bind wounds sufficiently to stop bleeding and heal some minor wounds. The process takes 1 minute to use and as long as it is being used, the target\'s Bleed Count is halted. If First Aid is interrupted, or if the wounded target moves or is moved in any way, the skill fails and the wounded target must continue their Bleed Count from where they left off. After a successful 1 minute of First Aid, the wounded target is healed to zero Body, bringing them to unconsciousness and halting their bleeding. First Aid also allows the character to bandage a target, healing one Body for each minute of bandaging up to the maximum allowed by their Physician level. A target in their Bleed Count cannot be bandaged. The player cannot bandage the same target more than once a day. It will not affect Undead in any way, with the exception that a player with Necromantic Arts may use this skill to heal Risen in Undead form.'}),
     skill('Necromantic Arts',       [75,75,60,75,75,60,55,60,55], [], {max:1, desc:'Necromantic Arts allows a user to recognize and identify whether or not standard identifiable signs of Undeath are present in an individual. It will not verify that something is alive, only whether or not it is Undead. This skill may only be used to answer the following questions: "Are you Undead?", "What kind of Undead are you?", "Are you lesser, greater or ancient Undead?", "How much damage have you taken (only to Undead)?" Characters with Necromantic Arts take 1 less damage (to a minimum of 1) from attacks by their identified target no matter the type of attack. Only one target may be active at a time. To change targets, the user may ask one of the questions above, or simply state "Necromantic Arts 1, 2, 3" if the new target has already been identified.'}),
     skill('Physician',              [45,45,45,45,45,45,45,45,40], [{name:'First Aid',minCount:1}], {desc:'After having mastered the art of Anatomy and First Aid, a character is ready to uncover the secrets of the living body. Every level of Physician will increase the amount of Body healed through First Aid bandaging by one, to a maximum of 11. Level 1 Barber: Perform First Aid on a moving target and extend their Bleed Count by 1 minute. Level 2 Pharmacist: Identify and cure non-Magical diseases (1 minute roleplay, once per 5 days per patient). Level 3 Physicker: Identify and purge toxins; target must be lying down unmoving for 1 minute. Level 4 Doctor: Perform minor surgeries (10 minutes, patient unconscious 30 minutes after); extend a dying target\'s Death Count by 5 minutes via CPR. Level 5 Surgeon: Perform major surgeries including re-attachment of lost limbs, removal of foreign life forms, and organ transplants. Level 6 Stasis Director: With a fellow physician, postpone death indefinitely by actively role playing keeping the patient\'s vitals in check. Level 7 Vital Warden: Perform a major surgery which restores all the target\'s hit points. Level 8 War Surgeon: Bandage at a rate of 2 Body per minute when working alone. Level 9 Specialist: Use intensive care single-handedly; perform anatomy checks while using any other physician skill. Level 10 Master Physician: Major and minor surgery time and patient unconsciousness period halved; a second surgery may be performed within five days.'}),
@@ -2576,7 +2636,7 @@ const SKILLS = [
     skill('Specialization +1: Weapon Specific',[100,120,130,150,130,150,230,180,230],[{name:'Weapon Group Proficiency: Medium|Weapon Group Proficiency: Large|Weapon Specific Proficiency: Exotic',minCount:1}], {_weaponChoice:'specific', desc:'This skill grants the player a +1 damage bonus with a single weapon that the character is proficient in, chosen at purchase. If purchased for Summoned Weapons it will apply to all Summoned Weapons within an individual sphere.'}),
     skill('Weapon Group Proficiency: Medium',  [40,40,40,50,50,50,80,80,80],  [], {max:1, desc:'This skill allows the player to properly wield the following one-handed weapons: Bow, Sword, Mace, Spears, Battle Axe, and any other non-Exotic weapon with a base damage of 2. Bows do Body damage.'}),
     skill('Weapon Group Proficiency: Large',   [70,70,70,100,100,100,130,130,130],[], {max:1, desc:'This skill allows the player to properly wield the following two-handed weapons: Crossbow, Sword, Axe, Mace, Pole Arm, and any other non-Exotic weapon with a base damage of 4. Bonus damage from Strength will be applied to Large Weapon swings at a rate of +1 damage for every 1 point of Strength, rather than the standard +1 damage for every 2 points. Strength bonuses will not increase Crossbow damage. Crossbows do Body damage.'}),
-    skill('Weapon Specific Proficiency: Exotic',[100,100,100,130,130,130,150,150,150],[], {max:1, _weaponChoice:'exotic', desc:'This skill allows the player to properly wield one of the following weapons: Stiletto (1 Body damage), two-handed Maul (5 damage), Bastard Sword (2 damage if wielded in one hand or 4 damage if wielded in both hands), or any other weapon that does Body damage or is summoned through magical means. Bonus damage from Strength will be applied to Maul swings at a rate of +1 damage for every 1 point of Strength, rather than the standard +1 damage for every 2 points. This skill can be purchased multiple times to allow a character to become proficient in multiple Exotic Weapons.'}),
+    skill('Weapon Specific Proficiency: Exotic',[100,100,100,130,130,130,150,150,150],[], {max:4, _weaponChoice:'exotic', desc:'This skill allows the player to properly wield one of the following weapons: Stiletto (1 Body damage), two-handed Maul (5 damage), Bastard Sword (2 damage if wielded in one hand or 4 damage if wielded in both hands), or any other weapon that does Body damage or is summoned through magical means. Bonus damage from Strength will be applied to Maul swings at a rate of +1 damage for every 1 point of Strength, rather than the standard +1 damage for every 2 points. This skill can be purchased multiple times to allow a character to become proficient in multiple Exotic Weapons.'}),
     skill('Weapon Refocus',                    [40,40,40,40,40,40,40,40,40],  [], {desc:'This skill allows the player to revisit their local training ground and upgrade their Weapon Specific Specialization +1 or Critical +2 or Slay/Parry to a Group Specialization +1 or Critical +2 or Slay/Parry: Master. This skill may only be used as an upgrade, not to downgrade a Group skill to a Weapon Specific skill.'}),
   ]},
   {cat:'Rogue', skills:[
@@ -2824,6 +2884,36 @@ function calcCP(blankets){
 
 function getLevelFromCP(cp){
   const rd=getRaceData(); const bonus=rd?rd.cpBonus:0; const adjCP=cp-bonus;
+  const last=TABLE[TABLE.length-1];
+  const prev=TABLE[TABLE.length-2];
+  const CP_PER_LEVEL = last.threshold - prev.threshold; // 100
+  const warriorInc = last.warrior - prev.warrior; // +2 per level
+  const rogueInc   = last.rogue   - prev.rogue;   // +1 per level
+  // Scholar: +1 every level EXCEPT levels divisible by 3 (skip at L3,6,9,12,15,18,21,24...)
+  // scholarAtLevel(n) = 3 + count of levels 2..n where level%3 !== 0
+  function scholarAtLevel(n){
+    // levels 1..n where scholar increases: all except multiples of 3
+    // increases = n-1 - floor((n-1)/3) ... but easier: sum from table then extrapolate
+    // For n <= 20 use table; for n > 20 use formula
+    const skips = Math.floor(n / 3); // levels 3,6,9... up to n
+    // scholar starts at 3 at level 1, gains +1 per non-multiple-of-3 transition
+    // transitions from L1 to Ln = n-1 total; skips = floor(n/3) of those
+    return 3 + (n - 1) - Math.floor(n / 3);
+  }
+  if(adjCP>=last.threshold){
+    const extraCP=adjCP-last.threshold;
+    const extraLevels=Math.floor(extraCP/CP_PER_LEVEL);
+    if(extraLevels===0) return last;
+    const newLevel = last.level + extraLevels;
+    return {
+      level:   newLevel,
+      threshold: last.threshold + extraLevels * CP_PER_LEVEL,
+      cpPer:   last.cpPer,
+      warrior: last.warrior + extraLevels * warriorInc,
+      rogue:   last.rogue   + extraLevels * rogueInc,
+      scholar: scholarAtLevel(newLevel),
+    };
+  }
   for(let i=TABLE.length-1;i>=0;i--){ if(adjCP>=TABLE[i].threshold) return TABLE[i]; }
   return TABLE[0];
 }
@@ -2832,11 +2922,13 @@ function blanketsNeededToEarnCP(currentCPTotal, deficit){
   if(deficit<=0) return 0;
   const rd=getRaceData(); const bonus=rd?rd.cpBonus:0;
   const adjCP=currentCPTotal-bonus;
+  const last=TABLE[TABLE.length-1];
   let rowIdx=0;
   for(let i=TABLE.length-1;i>=0;i--){ if(adjCP>=TABLE[i].threshold){ rowIdx=i; break; } }
   let blankets=0, cp=currentCPTotal, remaining=deficit;
   while(remaining>0){
-    const row=TABLE[rowIdx]; const nextRow=TABLE[rowIdx+1];
+    const row=rowIdx<TABLE.length?TABLE[rowIdx]:last;
+    const nextRow=rowIdx+1<TABLE.length?TABLE[rowIdx+1]:null;
     const cpToNext=nextRow?(nextRow.threshold-(cp-bonus)):Infinity;
     const blanketsToNext=nextRow?Math.ceil(cpToNext/row.cpPer):Infinity;
     const blanketsForDeficit=Math.ceil(remaining/row.cpPer);
@@ -2980,12 +3072,11 @@ function getBlockReason(sk, ignoreMax){
   // Skip race check for racial category skills — they're already filtered to current race
   if(sk.raceReq && sk.raceReq !== s.race && !sk._racial) return 'race';
 
-  // Racial skills: max 1 purchase per odd level reached
-  // Available purchases = number of odd levels reached so far = ceil(currentLevel/2)
-  // Block only if already at that cap, not just because current level is even
+  // Racial skills: total racial purchases capped at ceil(currentLevel/2) (1 per odd level)
   if(sk._racial && !sk._auto){
     const maxAtLevel = Math.ceil(currentLevel / 2);
-    if(!ignoreMax && count >= maxAtLevel) return 'level';
+    const totalRacialOwned = s.owned.filter(o=>o._racial && !o._auto).length;
+    if(!ignoreMax && totalRacialOwned >= maxAtLevel) return 'level';
   }
 
   // Occupational abilities: tier level gate (3rd, 6th, 9th, 12th)
@@ -3028,27 +3119,40 @@ function repriceCostdSkills(){
 
 // When blankets/occupation/race changes, strip any purchased skills that no longer meet gates
 function revalidateAll(){
-  // Collect skills that are now invalid due to level or prereqs
-  // (race changes handled separately via onRaceChange)
-  // We only auto-remove level-gated skills whose locks have returned
-  // and prereq cascades — we do NOT silently remove; instead we warn.
-  // For level regress: remove occupational skills purchased at higher levels
   const currentLevel = getCurrentLevel();
   const toRemove = [];
 
   s.owned.filter(o=>!o._auto).forEach(o=>{
-    if(o.occupational && currentLevel % 2 === 0){
-      toRemove.push(o.name);
+    // Occupational skills locked to odd levels
+    if(o.occupational && !o._occAbilityTier && currentLevel % 2 === 0){
+      toRemove.push(o.name || o._baseSkillName);
+    }
+    // Occupational ability tier gates (tier 1=3, 2=6, 3=9, 4=12)
+    if(o._occAbilityTier && currentLevel < o._occAbilityTier){
+      toRemove.push(o.name || o._baseSkillName);
     }
   });
 
+  // Racial skill cap: total racial purchases capped at ceil(level/2)
+  const racialMaxAtLevel = Math.ceil(currentLevel / 2);
+  const racialOwned = s.owned.filter(o=>o._racial && !o._auto);
+  if(racialOwned.length > racialMaxAtLevel){
+    // Remove the most recently purchased racial skills (from end of owned array) to bring under cap
+    const excess = racialOwned.length - racialMaxAtLevel;
+    // Find the last N racial owned entries and mark them for removal
+    const toRemoveRacial = racialOwned.slice(-excess).map(o=>o.name);
+    toRemoveRacial.forEach(n=>toRemove.push(n));
+  }
+
   if(toRemove.length){
     const names = [...new Set(toRemove)];
-    // cascade prereqs of these too
     const cascade = collectDependents(names);
     const allRemove = [...new Set([...names, ...cascade])];
     allRemove.forEach(name=>{
-      s.owned = s.owned.filter(o=>!(o.name===name&&!o._auto));
+      // Also clean up attunements
+      s.owned.filter(o=>(o.name===name||o._baseSkillName===name)&&!o._auto&&o._elementalAttunement)
+        .forEach(o=>{ if(o._chosenElement) s.elementalAttunements=s.elementalAttunements.filter(e=>e!==o._chosenElement); });
+      s.owned = s.owned.filter(o=>!((o.name===name||o._baseSkillName===name)&&!o._auto));
     });
   }
 }
@@ -3061,10 +3165,21 @@ function collectDependents(removedNames){
     changed = false;
     allSkills().forEach(sk=>{
       if(result.has(sk.name)) return;
-      if(getPurchaseCount(sk.name) === 0) return;
+      const skCount = getPurchaseCount(sk.name);
+      if(skCount === 0) return;
       for(const pre of (sk.prereqs||[])){
-        if(removedNames.includes(pre.name) || result.has(pre.name)){
-          result.add(sk.name); changed = true;
+        const options = (pre.name||'').split('|').map(o=>o.trim());
+        const need = pre.minCount || 1;
+        // prereqPerPurchase: Nth purchase needs N*need prereqs total
+        const required = (!pre.primaryGate && sk.prereqPerPurchase) ? need * skCount : need;
+        const isRemovedOption = options.some(opt => removedNames.includes(opt) || result.has(opt));
+        if(isRemovedOption){
+          const stillHave = options.reduce((sum,opt)=>{
+            const cnt = getPurchaseCount(opt);
+            const removing = (removedNames.includes(opt)||result.has(opt)) ? cnt : 0;
+            return sum + cnt - removing;
+          }, 0);
+          if(stillHave < required){ result.add(sk.name); changed = true; }
         }
       }
     });
@@ -3263,23 +3378,28 @@ function renderSkillCats(){
                 : getPurchaseCount(sk.name);
               const maxP = sk.maxPurchases || DEFAULT_MAX;
               const blockReason = getBlockReason(sk, false);
-              const isLocked = blockReason && blockReason !== 'maxed';
-              const isMaxed = sk._paragon ? count >= 1 : count >= maxP;
+              // Hard lock: anything that isn't just "at max" or "racial level cap"
+              const isRacialLevelCap = sk._racial && !sk._auto && blockReason === 'level';
+              const isOccLevelGate = sk.occupational && blockReason === 'level';
+              // isLocked = hard locked (hide +/- buttons entirely)
+              // Soft states (show disabled +/-): maxed, racial level cap
+              const isLocked = blockReason && blockReason !== 'maxed' && !isRacialLevelCap && !isOccLevelGate;
+              // isMaxed = + button disabled
+              const isMaxed = sk._paragon
+                ? count >= 1
+                : (blockReason === 'maxed' || isRacialLevelCap || isOccLevelGate);
               const isOwned = count > 0;
 
               // Build tag list
               let tags = isOwned ? `<span class="tag">purchased${count>1?` ×${count}`:''}</span>` : '';
               if(sk.frag) tags += `<span class="tag frag">${sk.frag} frag</span>`;
               if(sk.raceReq && sk.raceReq !== s.race) tags += `<span class="tag race-req">${sk.raceReq} only</span>`;
-              if(sk.occupational && !sk._occAbilityTier && currentLevel%2===0){
-                const nextLvl = currentLevel+1;
-                tags += `<span class="tag lvl-req">Lvl ${nextLvl} required</span>`;
-              }
               if(blockReason && blockReason.startsWith('prereq|')){
                 const [,prereqName,minCount] = blockReason.split('|');
                 tags += `<span class="tag prereq-req">Needs: ${prereqName}${minCount>1?' ×'+minCount:''}</span>`;
               }
-              if(isMaxed) tags += `<span class="tag">max ${maxP}</span>`;
+              if(isMaxed && blockReason === 'maxed') tags += `<span class="tag">max ${maxP}</span>`;
+              else if(isOccLevelGate) tags += `<span class="tag lvl-req">Lvl ${currentLevel%2===0?currentLevel+1:currentLevel+2} required</span>`;
 
               // Special spell/ritual slot display
               const isSlotEntry = sk._spellSlotEntry || sk._ritualSlotEntry;
@@ -3297,7 +3417,9 @@ function renderSkillCats(){
                   const nextOddLvl = currentLevel % 2 === 0 ? currentLevel + 1 : currentLevel + 2;
                   lockText = sk._racial
                     ? `Max at this level — next slot at Lvl ${nextOddLvl}`
-                    : `Lvl ${nextOddLvl} required (odd levels only)`;
+                    : sk.occupational
+                    ? `Lvl ${nextOddLvl} required (odd levels only)`
+                    : `Lvl ${nextOddLvl} required`;
                 } else if(blockReason.startsWith('prereq|')){
                   const [,prereqName,minCount] = blockReason.split('|');
                   lockText = `Needs: ${prereqName}${parseInt(minCount)>1?' ×'+minCount:''}`;
@@ -3317,7 +3439,7 @@ function renderSkillCats(){
                   <span class="cp-badge">${isSlotEntry ? (slotDone ? '—' : (s.occupation ? skCost+' cp' : '— cp')) : (s.occupation ? skCost+' cp' : '— cp')}</span>
                   ${!isLocked ? `
                     <button class="btn-sm minus" onclick="event.stopPropagation();tryRemoveOne('${cat.cat}',${si})" ${(isSlotEntry ? slotCount===0 : count===0)?'disabled':''}>−</button>
-                    <span class="count-badge">${isSlotEntry ? slotCount+'/'+slotMax : count+'/'+maxP}</span>
+                    <span class="count-badge">${isSlotEntry ? slotCount+'/'+slotMax : sk._racial && !sk._auto ? s.owned.filter(o=>o._racial&&!o._auto).length+'/'+Math.ceil(currentLevel/2) : count+'/'+maxP}</span>
                     <button class="btn-sm" onclick="event.stopPropagation();addOne('${cat.cat}',${si})" ${(isSlotEntry ? slotDone : isMaxed)||(sk.costs&&!s.occupation)?'disabled':''}>+</button>
                   ` : `<span style="font-size:11px;color:var(--color-text-warning);font-style:italic;max-width:90px;text-align:right;line-height:1.3">${lockText}</span>`}
                 </div>
@@ -3449,12 +3571,17 @@ function tryRemoveOne(cat, si){
   const dependents = [];
   allSkills().forEach(other=>{
     if(other.name === sk.name) return;
-    if(getPurchaseCount(other.name) === 0) return;
+    const otherCount = getPurchaseCount(other.name);
+    if(otherCount === 0) return;
     for(const pre of (other.prereqs||[])){
-      if(pre.name === sk.name){
-        const need = pre.minCount || 1;
-        if(count - 1 < need) dependents.push(other.name);
-      }
+      const options = (pre.name||'').split('|').map(o=>o.trim());
+      if(!options.includes(sk.name)) continue;
+      const need = pre.minCount || 1;
+      const totalHave = options.reduce((sum,opt)=>sum+getPurchaseCount(opt),0);
+      // For prereqPerPurchase skills, the Nth purchase requires N * need prereqs
+      // So check if removing one prereq drops below what's needed for otherCount purchases
+      const required = (!pre.primaryGate && other.prereqPerPurchase) ? need * otherCount : need;
+      if(totalHave - 1 < required) dependents.push(other.name);
     }
   });
 
@@ -3473,12 +3600,24 @@ function tryRemoveOne(cat, si){
 }
 
 function doRemoveOne(cat, si, skillName, alsoRemove){
-  // Remove one instance of skillName
-  const idx = s.owned.map((o,i)=>o.name===skillName&&!o._auto?i:-1).filter(i=>i>=0).pop();
-  if(idx != null && idx >= 0) s.owned.splice(idx,1);
-  // Remove all instances of cascade skills
+  // Remove one instance of skillName — match by name OR by _baseSkillName (for weapon-choice skills)
+  const idx = s.owned.map((o,i)=>
+    (o.name===skillName || o._baseSkillName===skillName) && !o._auto ? i : -1
+  ).filter(i=>i>=0).pop();
+  if(idx != null && idx >= 0){
+    const removed = s.owned[idx];
+    // If removing an elemental attunement skill, also remove that element from state
+    if(removed._elementalAttunement && removed._chosenElement){
+      s.elementalAttunements = s.elementalAttunements.filter(e => e !== removed._chosenElement);
+    }
+    s.owned.splice(idx, 1);
+  }
+  // Remove all instances of cascade skills, cleaning up attunements as we go
   alsoRemove.forEach(name=>{
-    s.owned = s.owned.filter(o=>!(o.name===name&&!o._auto));
+    s.owned
+      .filter(o => (o.name===name || o._baseSkillName===name) && !o._auto && o._elementalAttunement)
+      .forEach(o => { if(o._chosenElement) s.elementalAttunements = s.elementalAttunements.filter(e=>e!==o._chosenElement); });
+    s.owned = s.owned.filter(o => !((o.name===name || o._baseSkillName===name) && !o._auto));
   });
   render();
 }
@@ -4218,6 +4357,22 @@ function sbUpdateSummary(){
 
   panel.style.display = hasAny ? 'block' : 'none';
   grid.innerHTML = html;
+}
+
+function resetCharacter(){
+  if(!confirm('Reset all character selections? This cannot be undone.')) return;
+  s = { name:'', race:'', culture:'', occupation:'', vocation:'', blankets:0, owned:[], openCats:{General:false, 'Frag Skills':false, Production:false, Scholar:false, 'Scholar Class Frag Skills':false, Warrior:false, 'Warrior Class Frag Skills':false, Rogue:false, 'Rogue Class Frag Skills':false, Racial:false}, hovered:null, s_school_1:'', s_school_2:'', s_school_3:'', elementalAttunements:[] };
+  // Reset all input elements
+  const nm = document.getElementById('inp-name'); if(nm) nm.value = '';
+  const bl = document.getElementById('inp-blankets'); if(bl) bl.value = '0';
+  const rc = document.getElementById('sel-race'); if(rc) rc.value = '';
+  const cu = document.getElementById('sel-culture'); if(cu) cu.value = '';
+  const oc = document.getElementById('sel-occ'); if(oc) oc.value = '';
+  const vo = document.getElementById('sel-voc'); if(vo) vo.value = '';
+  // Reset detail panel
+  const detail = document.getElementById('detail-panel');
+  if(detail) detail.innerHTML = '<div class="detail-empty">Hover a skill to see details</div>';
+  render();
 }
 
 render();
