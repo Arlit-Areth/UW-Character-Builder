@@ -3205,7 +3205,13 @@ function collectDependents(removedNames){
 function calcStats(){
   const cpTotal = calcCP(s.blankets);
   const row = getLevelFromCP(cpTotal);
-  const cls = OCC_CLASS[s.occupation]||null;
+  let cls = OCC_CLASS[s.occupation]||null;
+  // Favoured vocations override body scaling regardless of occupation
+  const fvData = getFavouredVocationData();
+  if(fvData){
+    if(fvData.group === 'Champion') cls = 'warrior';
+    else if(fvData.group === 'Demagogue') cls = 'scholar';
+  }
   const baseBody = cls ? row[cls] : null;
   const body = baseBody != null ? baseBody + getBodyBonus() : null;
   const cpSpent = s.owned.filter(o=>!o._auto).reduce((a,sk)=>a+(sk.cp||0),0);
@@ -4379,4 +4385,19 @@ function resetCharacter(){
   // Reset all input elements
   const nm = document.getElementById('inp-name'); if(nm) nm.value = '';
   const bl = document.getElementById('inp-blankets'); if(bl) bl.value = '0';
-  const rc = document.getElementById('sel-race'); if(rc
+  const rc = document.getElementById('sel-race'); if(rc) rc.value = '';
+  const cu = document.getElementById('sel-culture'); if(cu) cu.value = '';
+  const oc = document.getElementById('sel-occ'); if(oc) oc.value = '';
+  const vo = document.getElementById('sel-voc'); if(vo) vo.value = '';
+  // Reset detail panel
+  const detail = document.getElementById('detail-panel');
+  if(detail) detail.innerHTML = '<div class="detail-empty">Hover a skill to see details</div>';
+  render();
+}
+
+render();
+</script>
+
+<div id="print-area"></div>
+</body>
+</html>
