@@ -4523,8 +4523,11 @@ function doRandomize(){
 }
 
 function randomlySpendCP(){
-  const MAX_PASSES = 500; // max passes with no purchase before giving up
+  const MAX_PASSES = 500;
   let stuckPasses = 0;
+
+  // Non-exclusive schools available for random selection
+  const NON_EXCLUSIVE_SCHOOLS = ['Healing','Elemental','Nature','Protections','Psionics','Sigil','Necromancy','Wytchcraft','Dredgecraft'];
 
   while(stuckPasses < MAX_PASSES){
     const cpTotal = calcCP(s.blankets);
@@ -4532,32 +4535,110 @@ function randomlySpendCP(){
     const cpRem = cpTotal - cpSpent;
     if(cpRem <= 0) break;
 
-    // Build list of affordable purchasable skills
     const available = [];
+
+    // --- Regular skills ---
     buildSkillCatList().forEach(cat=>{
       cat.skills.forEach(sk=>{
         if(sk._auto) return;
-        if(sk._paragon) return;       // requires spell slots, too complex
-        if(sk._weaponChoice) return;  // requires popup selection
-        if(sk.name === 'Elemental Attunement') return; // requires elemental sphere + primary
-
-        // Full prereq check — must pass all gates
+        if(sk._paragon) return;
+        if(sk._weaponChoice) return;
+        if(sk.name === 'Elemental Attunement') return;
         const block = getBlockReason(sk, false);
-        if(block) return; // blocked for any reason including prereqs and maxed
-
+        if(block) return;
         const cost = getSkillCost(sk);
-        if(cost <= 0 || cost > cpRem) return; // can't afford
-
-        available.push({cat: cat.cat, sk, cost});
+        if(cost <= 0 || cost > cpRem) return;
+        available.push({type:'skill', cat:cat.cat, sk, cost});
       });
     });
 
-    if(available.length === 0) break;
+    // --- Vocation (if none selected yet) ---
+    if(!s.vocation){
+      // Regular vocations (150 frags, no CP cost — frag-only, skip for CP randomizer)
+      // Favoured vocations cost 50 CP — try each one
+      Object.entries(FAVOURED_VOCATIONS).forEach(([name, fv])=>{
+        const cost = fv.cpCost || 50;
+        if(cost > cpRem) return;
+        // Prereqs: Favoured skill (auto-granted by vocation), Read Magic if mage class
+        // For simplicity just check CP — vocation prereqs are frag-based
+        available.push({type:'vocation', name, cost});
+      });
+      // Regular vocations have 0 CP cost — add them as free picks
+      Object.keys(VOCATIONS).forEach(name=>{
+        available.push({type:'vocation', name, cost:0});
+      });
+    }
 
-    // Pick random skill from available list
+    // --- Spheres ---
+    const hasSphere1 = getPurchaseCount('Sphere of Magic: 1st') > 0;
+    const hasSphere2 = getPurchaseCount('Sphere of Magic: 2nd') > 0;
+    const hasSphere3 = getPurchaseCount('Sphere of Magic: 3rd') > 0;
+    const hasReadMagic = getPurchaseCount('Read Magic') > 0;
+    const costs1 = [100,100,75,75,100,75,25,50,50];
+    const costs2 = [200,200,175,175,200,175,150,175,175];
+    const costs3 = [300,300,275,275,300,275,200,225,225];
+    const occIdx = OCC_ORDER.indexOf(s.occupation);
+
+    if(hasReadMagic && !hasSphere1){
+      const cost = occIdx>=0 ? costs1[occIdx] : costs1[0];
+      if(cost <= cpRem) available.push({type:'sphere', num:1, cost});
+    }
+    if(hasSphere1 && !hasSphere2){
+      const cost = occIdx>=0 ? costs2[occIdx] : costs2[0];
+      if(cost <= cpRem) available.push({type:'sphere', num:2, cost});
+    }
+    if(hasSphere2 && !hasSphere3){
+      const cost = occIdx>=0 ? costs3[occIdx] : costs3[0];
+      if(cost <= cpRem) available.push({type:'sphere', num:3, cost});
+    }
+
+    // --- Spell slots (if sphere purchased) — pyramid order enforced ---
+    if(hasSphere1){
+      const {canBuy} = getPyramidState();
+      canBuy.forEach(lvl=>{
+        const cost = getSpellLevelCost(lvl);
+        if(cost > 0 && cost <= cpRem) available.push({type:'spellslot', level:lvl, cost});
+      });
+    }
+
+    if(available.length === 0){ stuckPasses++; continue; }
+
+    // Pick random
     const pick = available[Math.floor(Math.random() * available.length)];
-    s.owned.push({...pick.sk, _cat: pick.cat, cp: pick.cost});
-    stuckPasses = 0;
+
+    if(pick.type === 'skill'){
+      s.owned.push({...pick.sk, _cat:pick.cat, cp:pick.cost});
+      stuckPasses = 0;
+
+    } else if(pick.type === 'vocation'){
+      s.vocation = pick.name;
+      // Apply vocation unlock entry
+      if(FAVOURED_VOCATIONS[pick.name]){
+        s.owned.push({
+          name:`Favoured: ${pick.name}`, _favouredUnlock:true, _cat:'Frag Skills',
+          cp:pick.cost, frag:0, bodyBonus:0, strBonus:0, costs:null, prereqs:[], maxPurchases:1,
+          desc:`Unlocks the ${pick.name} Favoured Vocation.`,
+        });
+      }
+      const vocEl = document.getElementById('sel-voc');
+      if(vocEl) vocEl.value = pick.name;
+      stuckPasses = 0;
+
+    } else if(pick.type === 'sphere'){
+      // Pick a random non-exclusive school for the slot
+      const usedSchools = [s.s_school_1, s.s_school_2, s.s_school_3].filter(Boolean);
+      const available_schools = NON_EXCLUSIVE_SCHOOLS.filter(sc=>!usedSchools.includes(sc));
+      if(!available_schools.length){ stuckPasses++; continue; }
+      const school = available_schools[Math.floor(Math.random()*available_schools.length)];
+      const names = ['Sphere of Magic: 1st','Sphere of Magic: 2nd','Sphere of Magic: 3rd'];
+      s.owned.push({name:names[pick.num-1], _spherePurchase:true, _cat:'Magic', cp:pick.cost, frag:0, bodyBonus:0, strBonus:0, costs:null, prereqs:[], maxPurchases:1});
+      s[`s_school_${pick.num}`] = school;
+      stuckPasses = 0;
+
+    } else if(pick.type === 'spellslot'){
+      s.owned.push({name:`Spell Slot: ${ordinal(pick.level)} Circle`, _spellSlot:true, _spellSlotLevel:pick.level, _cat:'Magic', cp:pick.cost, frag:0, bodyBonus:0, strBonus:0, costs:null});
+      stuckPasses = 0;
+    }
   }
 }
 
