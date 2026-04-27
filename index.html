@@ -1,4 +1,4 @@
-
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -304,6 +304,9 @@
         <button onclick="openSpellBuilder()" style="width:100%;padding:7px 16px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-primary);color:var(--color-text-primary);font-family:var(--font-sans);font-size:12px;font-weight:500;cursor:pointer">✦ Spell List Builder</button>
       </div>
       <div style="padding-top:6px">
+        <button onclick="openRandomize()" style="width:100%;padding:7px 16px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-primary);color:var(--color-text-primary);font-family:var(--font-sans);font-size:12px;font-weight:500;cursor:pointer">🎲 Randomize</button>
+      </div>
+      <div style="padding-top:6px">
         <button onclick="resetCharacter()" style="width:100%;padding:7px 16px;border:0.5px solid var(--color-border-danger, #5a2020);border-radius:var(--border-radius-md);background:transparent;color:var(--color-text-danger, #c05050);font-family:var(--font-sans);font-size:12px;font-weight:500;cursor:pointer">↺ Reset Character</button>
       </div>
     </div>
@@ -448,6 +451,38 @@
   </div>
 </div>
 
+<!-- Randomize Popup -->
+<div id="randomize-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:4500;align-items:center;justify-content:center;padding:1rem">
+  <div style="background:var(--color-background-primary);border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-lg);padding:1.5rem;max-width:420px;width:100%">
+    <div style="font-size:15px;font-weight:600;margin-bottom:0.4rem">🎲 Randomize Character</div>
+    <div style="font-size:12px;color:var(--color-text-secondary);margin-bottom:1.25rem;line-height:1.5">
+      Set a target level and occupation. Blankets will be calculated automatically, then skills will be randomly assigned until CP is spent.
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:1rem">
+      <div>
+        <label style="font-size:12px;font-weight:500;display:block;margin-bottom:5px">Target Level</label>
+        <input id="rand-level" type="number" min="1" max="100" value="10"
+          style="width:100%;padding:8px 10px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);font-family:var(--font-sans);font-size:13px;box-sizing:border-box">
+      </div>
+      <div>
+        <label style="font-size:12px;font-weight:500;display:block;margin-bottom:5px">Occupation</label>
+        <select id="rand-occ"
+          style="width:100%;padding:8px 10px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);font-family:var(--font-sans);font-size:13px;box-sizing:border-box">
+          <option value="">— any —</option>
+          <option>Mercenary</option><option>Ranger</option><option>Templar</option>
+          <option>Nightblade</option><option>Assassin</option><option>Wytchhunter</option>
+          <option>Mage</option><option>Druid</option><option>Bard</option>
+        </select>
+      </div>
+    </div>
+    <div id="rand-status" style="font-size:12px;min-height:18px;margin-bottom:0.75rem;color:var(--color-text-secondary)"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button onclick="closeRandomize()" style="padding:8px 18px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);font-family:var(--font-sans);font-size:13px;cursor:pointer">Cancel</button>
+      <button onclick="doRandomize()" style="padding:8px 18px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-primary);color:var(--color-text-primary);font-family:var(--font-sans);font-size:13px;font-weight:500;cursor:pointer">🎲 Randomize</button>
+    </div>
+  </div>
+</div>
+
 <!-- Bug Report Popup -->
 <div id="bug-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:4500;align-items:center;justify-content:center;padding:1rem">
   <div style="background:var(--color-background-primary);border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-lg);padding:1.5rem;max-width:560px;width:100%;max-height:90vh;overflow-y:auto">
@@ -536,6 +571,38 @@
 <div id="spell-summary-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:2100;overflow-y:auto;padding:2rem 1rem">
   <div id="spell-summary-content" style="max-width:800px;margin:0 auto;background:var(--color-background-primary);border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-lg);padding:2rem;position:relative">
     <div id="spell-summary-body"></div>
+  </div>
+</div>
+
+<!-- Randomize Popup -->
+<div id="randomize-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:2600;align-items:center;justify-content:center;padding:1rem">
+  <div style="background:var(--color-background-primary);border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-lg);padding:1.5rem;max-width:440px;width:100%">
+    <div style="font-size:15px;font-weight:600;margin-bottom:0.25rem">🎲 Randomize Character</div>
+    <div style="font-size:12px;color:var(--color-text-secondary);margin-bottom:1.25rem;line-height:1.5">Sets occupation and blankets to reach the chosen level, then randomly spends all available CP.</div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:1rem">
+      <div>
+        <label style="font-size:12px;font-weight:500;display:block;margin-bottom:5px">Occupation</label>
+        <select id="rand-occ" style="width:100%;padding:7px 10px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);font-family:var(--font-sans);font-size:13px">
+          <option value="">— select —</option>
+          <option>Mercenary</option><option>Ranger</option><option>Templar</option>
+          <option>Nightblade</option><option>Assassin</option><option>Wytchhunter</option>
+          <option>Mage</option><option>Druid</option><option>Bard</option>
+        </select>
+      </div>
+      <div>
+        <label style="font-size:12px;font-weight:500;display:block;margin-bottom:5px">Target Level</label>
+        <input id="rand-level" type="number" min="1" max="50" value="10"
+          style="width:100%;padding:7px 10px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);font-family:var(--font-sans);font-size:13px;box-sizing:border-box">
+      </div>
+    </div>
+
+    <div id="rand-status" style="font-size:12px;min-height:18px;margin-bottom:0.75rem;color:var(--color-text-secondary)"></div>
+
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button onclick="closeRandomize()" style="padding:8px 18px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);font-family:var(--font-sans);font-size:13px;cursor:pointer">Cancel</button>
+      <button onclick="doRandomize()" style="padding:8px 18px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-primary);color:var(--color-text-primary);font-family:var(--font-sans);font-size:13px;font-weight:500;cursor:pointer">🎲 Randomize</button>
+    </div>
   </div>
 </div>
 
@@ -3668,7 +3735,8 @@ function openCharacterSummary(){
 }
 
 function printCharacterSummary(){
-  const html = document.getElementById('char-summary-body').innerHTML || buildSummaryHTML();
+  const html = buildSummaryHTML();
+  document.getElementById('char-summary-body').innerHTML = html;
   document.getElementById('print-area').innerHTML = html;
   window.print();
 }
@@ -4379,20 +4447,202 @@ function sbUpdateSummary(){
   grid.innerHTML = html;
 }
 
-function resetCharacter(){
-  if(!confirm('Reset all character selections? This cannot be undone.')) return;
-  s = { name:'', race:'', culture:'', occupation:'', vocation:'', blankets:0, owned:[], openCats:{General:false, 'Frag Skills':false, Production:false, Scholar:false, 'Scholar Class Frag Skills':false, Warrior:false, 'Warrior Class Frag Skills':false, Rogue:false, 'Rogue Class Frag Skills':false, Racial:false}, hovered:null, s_school_1:'', s_school_2:'', s_school_3:'', elementalAttunements:[] };
-  // Reset all input elements
-  const nm = document.getElementById('inp-name'); if(nm) nm.value = '';
-  const bl = document.getElementById('inp-blankets'); if(bl) bl.value = '0';
-  const rc = document.getElementById('sel-race'); if(rc) rc.value = '';
-  const cu = document.getElementById('sel-culture'); if(cu) cu.value = '';
-  const oc = document.getElementById('sel-occ'); if(oc) oc.value = '';
-  const vo = document.getElementById('sel-voc'); if(vo) vo.value = '';
-  // Reset detail panel
-  const detail = document.getElementById('detail-panel');
-  if(detail) detail.innerHTML = '<div class="detail-empty">Hover a skill to see details</div>';
+// ---- Randomize ----
+function openRandomize(){
+  document.getElementById('rand-status').textContent = '';
+  if(s.occupation) document.getElementById('rand-occ').value = s.occupation;
+  document.getElementById('randomize-overlay').style.display = 'flex';
+}
+
+function closeRandomize(){
+  document.getElementById('randomize-overlay').style.display = 'none';
+}
+
+function doRandomize(){
+  const occ = document.getElementById('rand-occ').value;
+  const targetLevel = Math.max(1, parseInt(document.getElementById('rand-level').value)||1);
+  const statusEl = document.getElementById('rand-status');
+
+  if(!occ){
+    statusEl.textContent = 'Please select an occupation.';
+    return;
+  }
+
+  // Reset state, preserving name/race/culture
+  s.owned = [];
+  s.vocation = '';
+  s.s_school_1 = ''; s.s_school_2 = ''; s.s_school_3 = '';
+  s.elementalAttunements = [];
+  s.occupation = occ;
+
+  // Update DOM inputs
+  const occEl = document.getElementById('sel-occ');
+  if(occEl) occEl.value = occ;
+
+  // Apply racial auto skills if race set
+  if(s.race){
+    getRacialAutoSkills().forEach(sk=>{
+      if(!s.owned.find(o=>o.name===sk.name))
+        s.owned.push({...sk, _auto:true, cp:0, frag:sk.frag||0});
+    });
+  }
+
+  // Calculate blankets to reach target level
+  // Find the CP threshold for targetLevel
+  const rd = getRaceData();
+  const bonus = rd ? (rd.cpBonus||0) : 0;
+  const lastRow = TABLE[TABLE.length-1];
+  const prevRow = TABLE[TABLE.length-2];
+  const CPL = lastRow.threshold - prevRow.threshold; // 100 per level past 20
+  let targetCP;
+  if(targetLevel <= lastRow.level){
+    const row = TABLE.find(r=>r.level===targetLevel);
+    targetCP = (row ? row.threshold : 150) + bonus;
+  } else {
+    targetCP = lastRow.threshold + (targetLevel - lastRow.level) * CPL + bonus;
+  }
+  const baseCPWithBonus = 150 + bonus;
+  const deficit = Math.max(0, targetCP - baseCPWithBonus);
+  const blankets = deficit > 0 ? blanketsNeededToEarnCP(baseCPWithBonus, deficit) : 0;
+  s.blankets = blankets;
+  const blEl = document.getElementById('inp-blankets');
+  if(blEl) blEl.value = blankets;
+
+  // Randomly spend all available CP
+  randomlySpendCP();
+
+  // Show result in status briefly then close
+  const cpTotal = calcCP(s.blankets);
+  const cpSpent = s.owned.filter(o=>!o._auto).reduce((a,sk)=>a+(sk.cp||0),0);
+  const cpRem = cpTotal - cpSpent;
+  const purchased = s.owned.filter(o=>!o._auto).length;
+  statusEl.innerHTML = `<span style="color:var(--color-text-success,#7cb87c)">\u2713 Level ${getLevelFromCP(cpTotal).level} ${occ} \u2014 ${purchased} skills purchased, ${cpRem} CP remaining.</span>`;
+
   render();
+  setTimeout(closeRandomize, 2000);
+}
+
+function randomlySpendCP(){
+  const MAX_PASSES = 500; // max passes with no purchase before giving up
+  let stuckPasses = 0;
+
+  while(stuckPasses < MAX_PASSES){
+    const cpTotal = calcCP(s.blankets);
+    const cpSpent = s.owned.filter(o=>!o._auto).reduce((a,sk)=>a+(sk.cp||0),0);
+    const cpRem = cpTotal - cpSpent;
+    if(cpRem <= 0) break;
+
+    // Build list of affordable purchasable skills
+    const available = [];
+    buildSkillCatList().forEach(cat=>{
+      cat.skills.forEach(sk=>{
+        if(sk._auto) return;
+        if(sk._paragon) return;       // requires spell slots, too complex
+        if(sk._weaponChoice) return;  // requires popup selection
+        if(sk.name === 'Elemental Attunement') return; // requires elemental sphere + primary
+
+        // Full prereq check — must pass all gates
+        const block = getBlockReason(sk, false);
+        if(block) return; // blocked for any reason including prereqs and maxed
+
+        const cost = getSkillCost(sk);
+        if(cost <= 0 || cost > cpRem) return; // can't afford
+
+        available.push({cat: cat.cat, sk, cost});
+      });
+    });
+
+    if(available.length === 0) break;
+
+    // Pick random skill from available list
+    const pick = available[Math.floor(Math.random() * available.length)];
+    s.owned.push({...pick.sk, _cat: pick.cat, cp: pick.cost});
+    stuckPasses = 0;
+  }
+}
+
+// ---- Bug report ----
+function captureBugState(){
+  const owned = s.owned.filter(o=>!o._auto);
+  const skills = owned.map(o=>`  - ${o.name} (${o.cp||0} CP, ${o.frag||0} frag)`).join('\n');
+  const level  = document.getElementById('st-level')?.textContent  || '?';
+  const body   = document.getElementById('st-body')?.textContent   || '?';
+  const str    = document.getElementById('st-str')?.textContent    || '?';
+  const cpTot  = document.getElementById('st-cptotal')?.textContent|| '?';
+  const cpSpent= document.getElementById('st-cpspent')?.textContent|| '?';
+  const frags  = document.getElementById('st-frags')?.textContent  || '?';
+  const stats  = `Level ${level} | Body ${body} | Strength ${str} | CP Total ${cpTot} | CP Spent ${cpSpent} | Frags ${frags}`;
+  const spells = s.owned.filter(o=>o._spellSlot).map(o=>o.name).join(', ') || 'None';
+  const spheres = [s.s_school_1, s.s_school_2, s.s_school_3].filter(Boolean).join(', ') || 'None';
+  return [
+    `**Character State**`,
+    `Name: ${s.name||'(unnamed)'}`,
+    `Race: ${s.race||'(none)'} | Culture: ${s.culture||'(none)'}`,
+    `Occupation: ${s.occupation||'(none)'} | Vocation: ${s.vocation||'(none)'}`,
+    `Blankets: ${s.blankets}`,
+    `Stats: ${stats}`,
+    `Magic Spheres: ${spheres}`,
+    `Spell Slots: ${spells}`,
+    `Skills Purchased (${owned.length}):`,
+    skills || '  (none)',
+    ``,
+    `**Date:** ${new Date().toISOString().split('T')[0]}`,
+  ].join('\n');
+}
+
+function openBugReport(){
+  document.getElementById('bug-description').value = '';
+  document.getElementById('bug-status').textContent = '';
+  document.getElementById('bug-state-preview').textContent = captureBugState();
+  const btn = document.getElementById('bug-submit-btn');
+  btn.disabled = false;
+  btn.textContent = 'Submit Report';
+  document.getElementById('bug-overlay').style.display = 'flex';
+  setTimeout(()=>document.getElementById('bug-description').focus(), 50);
+}
+
+function closeBugReport(){
+  document.getElementById('bug-overlay').style.display = 'none';
+}
+
+async function submitBugReport(){
+  const desc = document.getElementById('bug-description').value.trim();
+  if(!desc){
+    document.getElementById('bug-status').innerHTML = '<span style="color:var(--color-text-danger)">Please enter a description.</span>';
+    return;
+  }
+  const btn = document.getElementById('bug-submit-btn');
+  btn.disabled = true;
+  btn.textContent = 'Opening GitHub…';
+  const state = captureBugState();
+  const body = `## Bug Description\n${desc}\n\n---\n\n${state}`;
+  const title = desc.length > 60 ? desc.substring(0,57)+'…' : desc;
+  const base = 'https://github.com/Arlit-Areth/UW-Character-Builder/issues/new';
+  const fullUrl = `${base}?title=${encodeURIComponent('[Bug] '+title)}&body=${encodeURIComponent(body)}&labels=bug`;
+  const url = fullUrl.length <= 8000 ? fullUrl : `${base}?title=${encodeURIComponent('[Bug] '+title)}&labels=bug`;
+  window.open(url, '_blank');
+  document.getElementById('bug-status').innerHTML = '<span style="color:var(--color-text-success)">✓ GitHub opened — review and click "Submit new issue".</span>';
+  btn.textContent = '✓ Opened GitHub';
+}
+
+function resetCharacter(){
+  showModal(
+    'Reset Character?',
+    'This will clear all character selections and cannot be undone.',
+    [],
+    ()=>{
+      s = { name:'', race:'', culture:'', occupation:'', vocation:'', blankets:0, owned:[], openCats:{General:false,'Frag Skills':false,Production:false,Scholar:false,'Scholar Class Frag Skills':false,Warrior:false,'Warrior Class Frag Skills':false,Rogue:false,'Rogue Class Frag Skills':false,Racial:false}, hovered:null, s_school_1:'', s_school_2:'', s_school_3:'', elementalAttunements:[] };
+      const nm = document.getElementById('inp-name'); if(nm) nm.value = '';
+      const bl = document.getElementById('inp-blankets'); if(bl) bl.value = '0';
+      const rc = document.getElementById('sel-race'); if(rc) rc.value = '';
+      const cu = document.getElementById('sel-culture'); if(cu) cu.value = '';
+      const oc = document.getElementById('sel-occ'); if(oc) oc.value = '';
+      const vo = document.getElementById('sel-voc'); if(vo) vo.value = '';
+      const detail = document.getElementById('detail-panel');
+      if(detail) detail.innerHTML = '<div class="detail-empty">Hover a skill to see details</div>';
+      render();
+    }
+  );
 }
 
 render();
