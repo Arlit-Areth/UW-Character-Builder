@@ -4511,6 +4511,9 @@ function doRandomize(){
   // Randomly spend all available CP
   randomlySpendCP();
 
+  // Randomly assign spells to any purchased spell slots
+  randomlyAssignSpells();
+
   // Show result in status briefly then close
   const cpTotal = calcCP(s.blankets);
   const cpSpent = s.owned.filter(o=>!o._auto).reduce((a,sk)=>a+(sk.cp||0),0);
@@ -4520,6 +4523,31 @@ function doRandomize(){
 
   render();
   setTimeout(closeRandomize, 2000);
+}
+
+function randomlyAssignSpells(){
+  // Clear existing selections
+  sbSelections = {};
+  const spheres = sbGetSpheres();
+  if(!spheres.length) return;
+
+  for(let lvl = 1; lvl <= 9; lvl++){
+    const slotCount = sbGetSlotCount(lvl);
+    if(!slotCount) continue;
+
+    // Get all spells available at this level from known spheres
+    const pool = SB_SPELLS.filter(sp => spheres.includes(sp.sphere) && sp.level === lvl);
+    if(!pool.length) continue;
+
+    // Shuffle pool
+    const shuffled = pool.slice().sort(() => Math.random() - 0.5);
+
+    for(let slot = 1; slot <= slotCount; slot++){
+      // Pick without repeating if possible, wrap around if more slots than spells
+      const spell = shuffled[(slot - 1) % shuffled.length];
+      sbSelections[`${lvl}-${slot}`] = `${spell.sphere}|${spell.name}`;
+    }
+  }
 }
 
 function randomlySpendCP(){
