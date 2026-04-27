@@ -4526,9 +4526,6 @@ function randomlySpendCP(){
   const MAX_PASSES = 500;
   let stuckPasses = 0;
 
-  // Non-exclusive schools available for random selection
-  const NON_EXCLUSIVE_SCHOOLS = ['Healing','Elemental','Nature','Protections','Psionics','Sigil','Necromancy','Wytchcraft','Dredgecraft'];
-
   while(stuckPasses < MAX_PASSES){
     const cpTotal = calcCP(s.blankets);
     const cpSpent = s.owned.filter(o=>!o._auto).reduce((a,sk)=>a+(sk.cp||0),0);
@@ -4569,30 +4566,54 @@ function randomlySpendCP(){
       });
     }
 
-    // --- Spheres ---
+    // --- Magic bundles: treat full prereq chains as single purchasable items ---
+    const hasReadWrite   = getPurchaseCount('Read & Write') > 0;
+    const hasReadMagic   = getPurchaseCount('Read Magic') > 0;
+    const hasReadMagicAdv= getPurchaseCount('Read Magic: Advanced') > 0;
     const hasSphere1 = getPurchaseCount('Sphere of Magic: 1st') > 0;
     const hasSphere2 = getPurchaseCount('Sphere of Magic: 2nd') > 0;
     const hasSphere3 = getPurchaseCount('Sphere of Magic: 3rd') > 0;
-    const hasReadMagic = getPurchaseCount('Read Magic') > 0;
-    const costs1 = [100,100,75,75,100,75,25,50,50];
-    const costs2 = [200,200,175,175,200,175,150,175,175];
-    const costs3 = [300,300,275,275,300,275,200,225,225];
     const occIdx = OCC_ORDER.indexOf(s.occupation);
+    const gc = (costs) => occIdx>=0 ? costs[occIdx] : costs[0]; // get cost for occupation
 
-    if(hasReadMagic && !hasSphere1){
-      const cost = occIdx>=0 ? costs1[occIdx] : costs1[0];
-      if(cost <= cpRem) available.push({type:'sphere', num:1, cost});
-    }
-    if(hasSphere1 && !hasSphere2){
-      const cost = occIdx>=0 ? costs2[occIdx] : costs2[0];
-      if(cost <= cpRem) available.push({type:'sphere', num:2, cost});
-    }
-    if(hasSphere2 && !hasSphere3){
-      const cost = occIdx>=0 ? costs3[occIdx] : costs3[0];
-      if(cost <= cpRem) available.push({type:'sphere', num:3, cost});
+    const rwCost   = gc([70,60,45,55,70,45,40,50,40]);
+    const rmCost   = gc([45,35,20,25,40,25,15,15,25]);
+    const rmaCost  = gc([50,45,30,35,50,35,25,25,35]);
+    const sp1Costs = [100,100,75,75,100,75,25,50,50];
+    const sp2Costs = [200,200,175,175,200,175,150,175,175];
+    const sp3Costs = [300,300,275,275,300,275,200,225,225];
+    const sp1Cost  = gc(sp1Costs);
+    const sp2Cost  = gc(sp2Costs);
+    const sp3Cost  = gc(sp3Costs);
+
+    // Bundle: everything needed to get sphere 1 (Read&Write + Read Magic + Sphere 1)
+    if(!hasSphere1){
+      let bundleCost = 0;
+      if(!hasReadWrite) bundleCost += rwCost;
+      if(!hasReadMagic) bundleCost += rmCost;
+      bundleCost += sp1Cost;
+      bundleCost += getSpellLevelCost(1); // always includes one 1st circle slot
+      if(bundleCost <= cpRem){
+        available.push({type:'magic_bundle', bundle:'sphere1', cost:bundleCost});
+      }
     }
 
-    // --- Spell slots (if sphere purchased) — pyramid order enforced ---
+    // Bundle: sphere 2 (requires sphere 1 already owned)
+    if(hasSphere1 && !hasSphere2 && sp2Cost <= cpRem){
+      available.push({type:'magic_bundle', bundle:'sphere2', cost:sp2Cost});
+    }
+
+    // Bundle: sphere 3 (requires sphere 2 already owned)
+    if(hasSphere2 && !hasSphere3 && sp3Cost <= cpRem){
+      available.push({type:'magic_bundle', bundle:'sphere3', cost:sp3Cost});
+    }
+
+    // Bundle: unlock levels 5–9 slots (Read Magic: Advanced, if sphere1 owned)
+    if(hasSphere1 && !hasReadMagicAdv && rmaCost <= cpRem){
+      available.push({type:'magic_bundle', bundle:'readmagicadv', cost:rmaCost});
+    }
+
+    // Spell slots — pyramid order enforced, only if sphere owned
     if(hasSphere1){
       const {canBuy} = getPyramidState();
       canBuy.forEach(lvl=>{
@@ -4624,15 +4645,42 @@ function randomlySpendCP(){
       if(vocEl) vocEl.value = pick.name;
       stuckPasses = 0;
 
-    } else if(pick.type === 'sphere'){
-      // Pick a random non-exclusive school for the slot
+    } else if(pick.type === 'magic_bundle'){
+      const schools = ['Healing','Elemental','Nature','Protections','Psionics','Sigil','Necromancy','Wytchcraft','Dredgecraft'];
       const usedSchools = [s.s_school_1, s.s_school_2, s.s_school_3].filter(Boolean);
-      const available_schools = NON_EXCLUSIVE_SCHOOLS.filter(sc=>!usedSchools.includes(sc));
-      if(!available_schools.length){ stuckPasses++; continue; }
-      const school = available_schools[Math.floor(Math.random()*available_schools.length)];
-      const names = ['Sphere of Magic: 1st','Sphere of Magic: 2nd','Sphere of Magic: 3rd'];
-      s.owned.push({name:names[pick.num-1], _spherePurchase:true, _cat:'Magic', cp:pick.cost, frag:0, bodyBonus:0, strBonus:0, costs:null, prereqs:[], maxPurchases:1});
-      s[`s_school_${pick.num}`] = school;
+      const availSchools = schools.filter(sc=>!usedSchools.includes(sc));
+
+      if(pick.bundle === 'sphere1'){
+        const occIdx2 = OCC_ORDER.indexOf(s.occupation);
+        const gc2 = (costs) => occIdx2>=0 ? costs[occIdx2] : costs[0];
+        if(!getPurchaseCount('Read & Write'))
+          s.owned.push({...skill('Read & Write',[70,60,45,55,70,45,40,50,40],[],{}), _cat:'Scholar', cp:gc2([70,60,45,55,70,45,40,50,40])});
+        if(!getPurchaseCount('Read Magic'))
+          s.owned.push({...skill('Read Magic',[45,35,20,25,40,25,15,15,25],[{name:'Read & Write',minCount:1}],{}), _cat:'Scholar', cp:gc2([45,35,20,25,40,25,15,15,25])});
+        const school = availSchools.length ? availSchools[Math.floor(Math.random()*availSchools.length)] : 'Healing';
+        s.owned.push({name:'Sphere of Magic: 1st', _spherePurchase:true, _cat:'Magic', cp:gc2([100,100,75,75,100,75,25,50,50]), frag:0, bodyBonus:0, strBonus:0, costs:null, prereqs:[], maxPurchases:1});
+        s.s_school_1 = school;
+        // Always include at least one 1st circle spell slot in the bundle
+        const slot1Cost = getSpellLevelCost(1);
+        s.owned.push({name:'Spell Slot: 1st Circle', _spellSlot:true, _spellSlotLevel:1, _cat:'Magic', cp:slot1Cost, frag:0, bodyBonus:0, strBonus:0, costs:null});
+
+      } else if(pick.bundle === 'sphere2'){
+        const school = availSchools.length ? availSchools[Math.floor(Math.random()*availSchools.length)] : null;
+        if(!school){ stuckPasses++; continue; }
+        s.owned.push({name:'Sphere of Magic: 2nd', _spherePurchase:true, _cat:'Magic', cp:pick.cost, frag:0, bodyBonus:0, strBonus:0, costs:null, prereqs:[], maxPurchases:1});
+        s.s_school_2 = school;
+
+      } else if(pick.bundle === 'sphere3'){
+        const school = availSchools.length ? availSchools[Math.floor(Math.random()*availSchools.length)] : null;
+        if(!school){ stuckPasses++; continue; }
+        s.owned.push({name:'Sphere of Magic: 3rd', _spherePurchase:true, _cat:'Magic', cp:pick.cost, frag:0, bodyBonus:0, strBonus:0, costs:null, prereqs:[], maxPurchases:1});
+        s.s_school_3 = school;
+
+      } else if(pick.bundle === 'readmagicadv'){
+        const occIdx2 = OCC_ORDER.indexOf(s.occupation);
+        const cp = occIdx2>=0 ? [50,45,30,35,50,35,25,25,35][occIdx2] : 50;
+        s.owned.push({...skill('Read Magic: Advanced',[50,45,30,35,50,35,25,25,35],[{name:'Read Magic',minCount:1}],{}), _cat:'Scholar', cp});
+      }
       stuckPasses = 0;
 
     } else if(pick.type === 'spellslot'){
