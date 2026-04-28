@@ -1295,40 +1295,52 @@ function addSpellSlot(level){
   render();
 }
 
+// Returns true if all 9 levels have exactly 5+ slots — unlocks second tier (up to 10 per level)
+function isSecondTierUnlocked(){
+  const slots = getSlotsByLevel();
+  for(let lvl=1; lvl<=9; lvl++){
+    if(slots[lvl] < 5) return false;
+  }
+  return true;
+}
+
 // Manual purchase state — only skill prereq gates, zero pyramid rules
 function getManualSpellState(){
   const slots = getSlotsByLevel();
   const hasSphere = getPurchaseCount('Sphere of Magic: 1st') > 0;
   const hasReadMagicAdv = getPurchaseCount('Read Magic: Advanced') > 0;
+  const secondTier = isSecondTierUnlocked();
+  const cap = secondTier ? 10 : 5;
   const canAdd = [];
   const canRemove = [];
   for(let lvl=1; lvl<=9; lvl++){
     const have = slots[lvl];
-    // Determine if this level is unlocked by prereqs
     const prereqMet = lvl <= 4 ? hasSphere : (hasSphere && hasReadMagicAdv);
     if(prereqMet){
-      if(have < 5) canAdd.push(lvl);
+      if(have < cap) canAdd.push(lvl);
       if(have > 0) canRemove.push(lvl);
     }
   }
   return {canAdd, canRemove, slots};
 }
 
-// Pyramid rules — used only by buyToLevel
+// Pyramid rules — used only by buyToLevel and randomizer
 function getPyramidState(){
   const slots = getSlotsByLevel();
   const hasSphere = getPurchaseCount('Sphere of Magic: 1st') > 0;
   const hasReadMagicAdv = getPurchaseCount('Read Magic: Advanced') > 0;
   if(!hasSphere) return {canBuy:[], forced:null, slots};
 
+  const secondTier = isSecondTierUnlocked();
+  const cap = secondTier ? 10 : 5;
+
   const canBuy = [];
   let forced = null;
 
   for(let lvl=1; lvl<=9; lvl++){
     const have = slots[lvl];
-    if(have >= 5) continue;
+    if(have >= cap) continue;
     if(lvl === 1){ canBuy.push(1); continue; }
-    // Level 5 requires Read Magic: Advanced for any slot
     if(lvl === 5 && !hasReadMagicAdv) continue;
     if(slots[lvl-1] < have + 1) continue;
     let chainValid = true;
@@ -1340,7 +1352,7 @@ function getPyramidState(){
   }
 
   for(let lvl=2; lvl<=8; lvl++){
-    if(slots[lvl] >= slots[lvl+1] + 2 && slots[lvl+1] < 5){
+    if(slots[lvl] >= slots[lvl+1] + 2 && slots[lvl+1] < cap){
       forced = lvl + 1;
       break;
     }
@@ -1355,12 +1367,31 @@ function getPyramidState(){
 function removeSpellSlot(level){
   const {canRemove} = getManualSpellState();
   if(!canRemove.includes(level)) return;
+
+  // Remove one slot at this level
   for(let i=s.owned.length-1; i>=0; i--){
     if(s.owned[i]._spellSlot && s.owned[i]._spellSlotLevel===level){
       s.owned.splice(i,1);
       break;
     }
   }
+
+  // If this level now has fewer than 5, second tier is broken — strip all slots > 5 for ALL levels
+  const slotsAfter = getSlotsByLevel();
+  if(slotsAfter[level] < 5){
+    for(let lvl=1; lvl<=9; lvl++){
+      let excess = slotsAfter[lvl] - 5;
+      if(excess <= 0) continue;
+      // Remove 'excess' slots from the end for this level
+      for(let i=s.owned.length-1; i>=0 && excess>0; i--){
+        if(s.owned[i]._spellSlot && s.owned[i]._spellSlotLevel===lvl){
+          s.owned.splice(i,1);
+          excess--;
+        }
+      }
+    }
+  }
+
   render();
 }
 
@@ -1463,7 +1494,7 @@ function renderMagicPanel(){
   const sphere1 = getPurchaseCount('Sphere of Magic: 1st');
   const sphere2 = getPurchaseCount('Sphere of Magic: 2nd');
   const sphere3 = getPurchaseCount('Sphere of Magic: 3rd');
-  const sphereCount = sphere1+sphere2+sphere3;
+  const sphereCount = sphere1+sphere2+sphere3 + (s.extraSpheres||[]).length;
 
   sub.textContent = sphereCount ? `(${sphereCount} sphere${sphereCount>1?'s':''}, ${totalSlots} slot${totalSlots!==1?'s':''})` : '';
   chev.textContent = magicOpen?'▲':'▼';
@@ -1495,7 +1526,8 @@ function renderMagicSpheres(){
     const cost = idx>=0 ? sp.costs[idx] : sp.costs[0];
     const schoolKey = `s_school_${sp.num}`;
     const selectedSchool = s[schoolKey]||'';
-    const usedSchools = [s.s_school_1||'', s.s_school_2||'', s.s_school_3||''].filter(Boolean);
+    const usedSchools = [s.s_school_1||'', s.s_school_2||'', s.s_school_3||'']
+      .concat((s.extraSpheres||[]).map(e=>e.school)).filter(Boolean);
 
     return `<div class="magic-sphere-card${sp.owned?' owned':''}${!sp.prereq&&!sp.owned?' locked':''}">
       <div class="magic-sphere-title">${sp.label}${sp.owned&&selectedSchool?' — '+selectedSchool:''}</div>
@@ -1534,6 +1566,50 @@ function renderMagicSpheres(){
       }
     </div>`;
   }).join('');
+
+  // Extra spheres (4th+)
+  const extraSpheres = s.extraSpheres || [];
+  const usedSchoolsAll = [s.s_school_1||'',s.s_school_2||'',s.s_school_3||'']
+    .concat(extraSpheres.map(e=>e.school)).filter(Boolean);
+  const maxSpheres = getMaxAllowedSpheres();
+  const totalSpheres = 3 + extraSpheres.length;
+
+  let extraHTML = extraSpheres.map((es,idx)=>{
+    const num = 4 + idx;
+    const school = es.school||'';
+    const usedExcluding = usedSchoolsAll.filter(sc=>sc!==school);
+    return `<div class="magic-sphere-card owned">
+      <div class="magic-sphere-title">Sphere ${num}${school?' — '+school:''}</div>
+      <div class="magic-sphere-actions">
+        <select class="magic-sphere-select" onchange="setExtraSphereSchool(${idx},this.value)">
+          <option value="">— choose school —</option>
+          ${SCHOOLS_OF_MAGIC.map(sc=>{
+            const isExclusive = Object.keys(EXCLUSIVE_SPHERES).includes(sc);
+            const isAllowed = isSphereSchoolAllowed(sc);
+            const isUsed = usedExcluding.includes(sc);
+            const disabled = isUsed || (isExclusive && !isAllowed);
+            return `<option value="${sc}"${sc===school?' selected':''}${disabled?' disabled':''}>${sc}</option>`;
+          }).join('')}
+        </select>
+        <button class="magic-sphere-btn remove" onclick="removeExtraSphere(${idx})">Remove</button>
+      </div>
+      ${school && FAVOURED_FRAG_SPHERES.includes(school)?`<div style="font-size:10px;color:var(--color-text-warning);margin-top:3px">+100 frags (${school})</div>`:''}
+    </div>`;
+  }).join('');
+
+  // "Purchase Additional Sphere" button — only shown if sphere 3 owned and more schools available
+  if(hasSphere3 && totalSpheres < maxSpheres && s.occupation){
+    const cost = getExtraSphereBaseCost();
+    extraHTML += `<div class="magic-sphere-card" style="border-style:dashed;opacity:0.8">
+      <div class="magic-sphere-title" style="color:var(--color-text-tertiary)">Sphere ${totalSpheres+1}</div>
+      <div class="magic-sphere-actions">
+        <span style="font-size:11px;color:var(--color-text-tertiary)">${cost} cp</span>
+        <button class="magic-sphere-btn" onclick="buyExtraSphere()">Purchase</button>
+      </div>
+    </div>`;
+  }
+
+  if(extraHTML) row.innerHTML += extraHTML;
 }
 
 function setElementalAttunement(element){
@@ -1546,6 +1622,59 @@ function setElementalAttunement(element){
 
 function getElementalAttunements(){
   return s.elementalAttunements || [];
+}
+
+// Extra spheres (4th, 5th, ... beyond sphere 3)
+function getExtraSphereCount(){ return (s.extraSpheres||[]).length; }
+
+function getMaxAllowedSpheres(){
+  // Count schools available to this character
+  let count = 0;
+  for(const sc of SCHOOLS_OF_MAGIC){
+    if(isSphereSchoolAllowed(sc)) count++;
+  }
+  return count; // max spheres = max distinct schools they can access
+}
+
+function getExtraSphereBaseCost(){
+  // Same as sphere 3 cost for this occupation/vocation
+  const sp3Costs = [300,300,275,275,300,275,200,225,225];
+  const favTable = getFavouredCostTable();
+  if(favTable){
+    return getFavouredVocationData()&&getFavouredVocationData().group==='Demagogue' ? 225 : 300;
+  }
+  const idx = OCC_ORDER.indexOf(s.occupation);
+  return idx>=0 ? sp3Costs[idx] : sp3Costs[0];
+}
+
+function buyExtraSphere(){
+  if(!s.occupation) return;
+  if(getPurchaseCount('Sphere of Magic: 3rd')===0) return;
+  if(!s.extraSpheres) s.extraSpheres=[];
+  const cp = getExtraSphereBaseCost();
+  s.extraSpheres.push({school:'', cp});
+  // Add to owned for CP tracking
+  const num = 3 + s.extraSpheres.length;
+  s.owned.push({name:`Sphere of Magic: ${num}th`, _spherePurchase:true, _extraSphere:true, _extraSphereIdx:s.extraSpheres.length-1, _cat:'Magic', cp, frag:0, bodyBonus:0, strBonus:0, costs:null, prereqs:[], maxPurchases:1});
+  render();
+}
+
+function removeExtraSphere(idx){
+  if(!s.extraSpheres||idx<0||idx>=s.extraSpheres.length) return;
+  // Remove from owned
+  s.owned = s.owned.filter(o=>!(o._extraSphere && o._extraSphereIdx===idx));
+  // Re-index remaining extra spheres in owned
+  s.extraSpheres.splice(idx,1);
+  // Fix indices on remaining owned extra sphere entries
+  let ei=0;
+  s.owned.filter(o=>o._extraSphere).forEach(o=>{ o._extraSphereIdx=ei++; const n=3+ei; o.name=`Sphere of Magic: ${n}th`; });
+  render();
+}
+
+function setExtraSphereSchool(idx, school){
+  if(!s.extraSpheres||idx<0) return;
+  s.extraSpheres[idx].school = school;
+  render();
 }
 
 
@@ -1598,14 +1727,16 @@ function isSphereSchoolAllowed(school){
 
 // Extra frag cost for selecting certain schools (Sigil, Wytchcraft, Necromancy, Dredgecraft)
 function getFavouredSphereFragSurcharge(){
-  // 100 frag surcharge per Sigil/Wytchcraft/Necromancy/Dredgecraft sphere owned
   let surcharge = 0;
+  const sphereNames = ['Sphere of Magic: 1st','Sphere of Magic: 2nd','Sphere of Magic: 3rd'];
   ['s_school_1','s_school_2','s_school_3'].forEach((key, i)=>{
-    // Only count if the sphere is actually purchased
-    const sphereNames = ['Sphere of Magic: 1st','Sphere of Magic: 2nd','Sphere of Magic: 3rd'];
     if(s[key] && FAVOURED_FRAG_SPHERES.includes(s[key]) && getPurchaseCount(sphereNames[i]) > 0){
       surcharge += 100;
     }
+  });
+  // Extra spheres
+  (s.extraSpheres||[]).forEach(es=>{
+    if(es.school && FAVOURED_FRAG_SPHERES.includes(es.school)) surcharge += 100;
   });
   return surcharge;
 }
@@ -1640,6 +1771,9 @@ function doRemoveSphere(num){
   if(num<=1){
     s.owned = s.owned.filter(o=>!o._spellSlot);
     s.owned = s.owned.filter(o=>!o._ritualSlot);
+    // Clear extra spheres
+    s.owned = s.owned.filter(o=>!o._extraSphere);
+    s.extraSpheres = [];
     // Clear elemental attunements if Elemental was a selected school
     if(s['s_school_1']==='Elemental'||s['s_school_2']==='Elemental'||s['s_school_3']==='Elemental'){
       s.owned = s.owned.filter(o=>!o._elementalAttunement);
@@ -1650,6 +1784,9 @@ function doRemoveSphere(num){
   if(num<=2){
     // Remove sphere 3 purchase when sphere 2 is removed
     s.owned = s.owned.filter(o=>!(o.name==='Sphere of Magic: 3rd' && o._spherePurchase));
+    // Clear extra spheres when sphere 2 removed
+    s.owned = s.owned.filter(o=>!o._extraSphere);
+    s.extraSpheres = [];
     // Clear elemental attunements if Elemental was school 2 or 3
     if(s['s_school_2']==='Elemental'||s['s_school_3']==='Elemental'){
       s.owned = s.owned.filter(o=>!o._elementalAttunement);
@@ -1658,6 +1795,9 @@ function doRemoveSphere(num){
     s['s_school_2']='';
   }
   if(num<=3){
+    // Clear extra spheres when sphere 3 removed
+    s.owned = s.owned.filter(o=>!o._extraSphere);
+    s.extraSpheres = [];
     // Clear elemental attunements if Elemental was school 3
     if(s['s_school_3']==='Elemental'){
       s.owned = s.owned.filter(o=>!o._elementalAttunement);
@@ -1709,31 +1849,39 @@ function renderMagicLevels(){
 
 function buildLevelCard(lvl, slots, canBuy, forced, hasSphere){
   const count = slots[lvl]||0;
-  const isComplete = count>=5;
+  const secondTier = isSecondTierUnlocked();
+  const cap = secondTier ? 10 : 5;
+  const isComplete = count >= cap;
   const cost = getSpellLevelCost(lvl);
 
-  // Prereq check only — no pyramid gating for manual purchases
   const hasReadMagicAdv = getPurchaseCount('Read Magic: Advanced') > 0;
   const prereqMet = lvl <= 4 ? hasSphere : (hasSphere && hasReadMagicAdv);
   const isLocked = !prereqMet;
   const addDisabled = isLocked || isComplete || !s.occupation;
   const removeDisabled = count === 0 || isLocked;
 
-  // For visual indicators on the buyToLevel pyramid state
   const isForced = forced===lvl;
-  const dotClass = isForced ? 'filled-warning' : isComplete ? 'filled-success' : 'filled';
+  const dotClass = isForced ? 'filled-warning' : (count >= 5 ? 'filled-success' : 'filled');
   const subtitle = isForced ? ' ⬆' : '';
 
   let lockNote = '';
   if(!hasSphere) lockNote = `<div style="font-size:9px;color:var(--color-text-tertiary);text-align:center">Needs Sphere 1</div>`;
   else if(lvl >= 5 && !hasReadMagicAdv) lockNote = `<div style="font-size:9px;color:var(--color-text-warning);text-align:center">Needs Read Magic: Adv.</div>`;
+  else if(!secondTier && count === 5) lockNote = `<div style="font-size:9px;color:var(--color-text-tertiary);text-align:center">Fill all levels to unlock 10</div>`;
+
+  // Dots: always show cap-many dots (5 or 10)
+  const dots = Array(cap).fill(0).map((_,i)=>{
+    const cls = i < count ? (i < 5 ? 'filled-success' : 'filled') : '';
+    return `<div class="magic-dot${cls?' '+cls:''}"></div>`;
+  }).join('');
 
   return `<div class="magic-level-card${isForced?' forced':''}${isLocked?' locked':''}${isComplete?' complete':''}">
     <div class="magic-level-title">${ordinal(lvl)} Circle${subtitle}</div>
-    <div class="magic-slots-dots">${Array(5).fill(0).map((_,i)=>`<div class="magic-dot${i<count?' '+dotClass:''}"></div>`).join('')}</div>
+    <div class="magic-slots-dots">${dots}</div>
     <div class="magic-level-cost">${prereqMet&&s.occupation ? cost+'cp' : '—'}</div>
     <div class="magic-level-btns">
-      <span class="magic-level-count">${count}/5</span>
+      <span class="magic-level-count">${count}/${cap}</span>
+      <button class="btn-sm minus" onclick="removeSpellSlot(${lvl})" ${removeDisabled?'disabled':''}>−</button>
       <button class="btn-sm" onclick="addSpellSlot(${lvl})" ${addDisabled?'disabled':''}>+</button>
     </div>
     ${lockNote}
@@ -2865,7 +3013,7 @@ const SKILLS = [
 ];
 
 // ---- State ----
-let s = { name:'', race:'', culture:'', occupation:'', vocation:'', blankets:0, owned:[], openCats:{General:false, 'Frag Skills':false, Production:false, Scholar:false, 'Scholar Class Frag Skills':false, Warrior:false, 'Warrior Class Frag Skills':false, Rogue:false, 'Rogue Class Frag Skills':false, Racial:false}, hovered:null, s_school_1:'', s_school_2:'', s_school_3:'', elementalAttunements:[] };
+let s = { name:'', race:'', culture:'', occupation:'', vocation:'', blankets:0, owned:[], openCats:{General:false, 'Frag Skills':false, Production:false, Scholar:false, 'Scholar Class Frag Skills':false, Warrior:false, 'Warrior Class Frag Skills':false, Rogue:false, 'Rogue Class Frag Skills':false, Racial:false}, hovered:null, s_school_1:'', s_school_2:'', s_school_3:'', elementalAttunements:[], extraSpheres:[] };
 
 // ---- Helpers ----
 function getRaceData(){
@@ -4336,11 +4484,11 @@ function sbResolveIncant(spell){
 }
 
 function sbGetSpheres(){
-  // Read spheres from the main builder's state
   const spheres = new Set();
   if(s.s_school_1) spheres.add(s.s_school_1);
   if(s.s_school_2) spheres.add(s.s_school_2);
   if(s.s_school_3) spheres.add(s.s_school_3);
+  (s.extraSpheres||[]).forEach(es=>{ if(es.school) spheres.add(es.school); });
   return [...spheres];
 }
 
@@ -4575,6 +4723,7 @@ function doRandomize(){
   s.vocation = '';
   s.s_school_1 = ''; s.s_school_2 = ''; s.s_school_3 = '';
   s.elementalAttunements = [];
+  s.extraSpheres = [];
   s.occupation = occ;
 
   // Update DOM inputs
@@ -4890,7 +5039,7 @@ function resetCharacter(){
     'This will clear all character selections and cannot be undone.',
     [],
     ()=>{
-      s = { name:'', race:'', culture:'', occupation:'', vocation:'', blankets:0, owned:[], openCats:{General:false,'Frag Skills':false,Production:false,Scholar:false,'Scholar Class Frag Skills':false,Warrior:false,'Warrior Class Frag Skills':false,Rogue:false,'Rogue Class Frag Skills':false,Racial:false}, hovered:null, s_school_1:'', s_school_2:'', s_school_3:'', elementalAttunements:[] };
+      s = { name:'', race:'', culture:'', occupation:'', vocation:'', blankets:0, owned:[], openCats:{General:false,'Frag Skills':false,Production:false,Scholar:false,'Scholar Class Frag Skills':false,Warrior:false,'Warrior Class Frag Skills':false,Rogue:false,'Rogue Class Frag Skills':false,Racial:false}, hovered:null, s_school_1:'', s_school_2:'', s_school_3:'', elementalAttunements:[], extraSpheres:[] };
       const nm = document.getElementById('inp-name'); if(nm) nm.value = '';
       const bl = document.getElementById('inp-blankets'); if(bl) bl.value = '0';
       const rc = document.getElementById('sel-race'); if(rc) rc.value = '';
