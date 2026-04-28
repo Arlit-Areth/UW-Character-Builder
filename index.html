@@ -2019,10 +2019,31 @@ const WEAPON_CHOICE_SKILLS = new Set([
 ]);
 
 // Get all weapon types the character is currently proficient with
+// Am'Rath treat all non-simple melee weapons as exotic (ranged excluded from restriction)
+const AMRATH_EXOTIC_POOL = [
+  // From Medium (non-ranged)
+  'Sword (1H)','Mace/Hammer (1H)','Spear (1H)','Axe (1H)','Claw',
+  // From Large (non-ranged)
+  'Great Sword (2H)','Polearm (2H)','Axe (2H)','Mace/Hammer (2H)',
+  // Standard exotics
+  'Stiletto','Maul (2H)','Bastard Sword',
+  // Summoned Weapon (still requires exotic proficiency purchase)
+  'Summoned Weapon',
+];
+const AMRATH_RANGED = ['Bow','Crossbow'];
+
+function isAmRath(){ return s.race === "Am'Rath"; }
+
 function getOwnedWeaponTypes(){
   const types = [...WEAPON_TYPES.simple]; // Simple always auto-granted
-  if(getPurchaseCount('Weapon Group Proficiency: Medium')>0) types.push(...WEAPON_TYPES.medium);
-  if(getPurchaseCount('Weapon Group Proficiency: Large')>0)  types.push(...WEAPON_TYPES.large);
+  if(isAmRath()){
+    // Am'Rath: Medium proficiency = Bow only, Large = Crossbow only
+    if(getPurchaseCount('Weapon Group Proficiency: Medium')>0) types.push('Bow');
+    if(getPurchaseCount('Weapon Group Proficiency: Large')>0)  types.push('Crossbow');
+  } else {
+    if(getPurchaseCount('Weapon Group Proficiency: Medium')>0) types.push(...WEAPON_TYPES.medium);
+    if(getPurchaseCount('Weapon Group Proficiency: Large')>0)  types.push(...WEAPON_TYPES.large);
+  }
   // Each Exotic Proficiency purchase grants one specific exotic weapon (tracked via _weaponType)
   const exoticOwned = s.owned
     .filter(o=>(o._baseSkillName||o.name)==='Weapon Specific Proficiency: Exotic' && o._weaponType)
@@ -2030,7 +2051,9 @@ function getOwnedWeaponTypes(){
   exoticOwned.forEach(w=>{ if(!types.includes(w)) types.push(w); });
   // Fallback: if exotic purchased but no weapon type recorded, add all exotic
   const exoticCount = getPurchaseCount('Weapon Specific Proficiency: Exotic');
-  if(exoticCount>0 && exoticOwned.length===0) types.push(...WEAPON_TYPES.exotic);
+  if(exoticCount>0 && exoticOwned.length===0){
+    types.push(...(isAmRath() ? AMRATH_EXOTIC_POOL : WEAPON_TYPES.exotic));
+  }
   return types;
 }
 
@@ -2471,12 +2494,14 @@ function openWeaponChoicePopup(cat, si, sk){
 
   if(sk._weaponChoice === 'exotic'){
     // Exotic proficiency: choose one exotic weapon not yet owned
-    document.getElementById('weapon-choice-subtitle').textContent =
-      'Choose an exotic weapon to become proficient with.';
+    const exoticPool = isAmRath() ? AMRATH_EXOTIC_POOL : WEAPON_TYPES.exotic;
+    document.getElementById('weapon-choice-subtitle').textContent = isAmRath()
+      ? 'Choose a non-simple melee weapon to become proficient with (ranged weapons use their own proficiency).'
+      : 'Choose an exotic weapon to become proficient with.';
     const alreadyOwned = s.owned
       .filter(o=>(o._baseSkillName||o.name)==='Weapon Specific Proficiency: Exotic' && o._weaponType)
       .map(o=>o._weaponType);
-    WEAPON_TYPES.exotic.forEach(w=>{
+    exoticPool.forEach(w=>{
       const opt = document.createElement('option');
       opt.value = w; opt.textContent = w;
       if(alreadyOwned.includes(w)) opt.disabled = true;
@@ -2585,8 +2610,10 @@ function getAvailableWeapons(){
 
 function getAvailableWeaponGroups(){
   const groups = ['Simple'];
-  if(getPurchaseCount('Weapon Group Proficiency: Medium')>0) groups.push('Medium');
-  if(getPurchaseCount('Weapon Group Proficiency: Large')>0) groups.push('Large');
+  if(!isAmRath()){
+    if(getPurchaseCount('Weapon Group Proficiency: Medium')>0) groups.push('Medium');
+    if(getPurchaseCount('Weapon Group Proficiency: Large')>0) groups.push('Large');
+  }
   return groups;
 }
 
@@ -2774,9 +2801,9 @@ const SKILLS = [
     skill('Slay/Parry: Master Subsequent',    [120,140,150,190,170,190,270,220,270],[{name:'Slay/Parry: Master',minCount:1,primaryGate:true},{name:'Specialization +1: Weapon Group',minCount:1}], {max:9, prereqPerPurchase:true, _weaponChoice:'group', desc:'Requires Slay/Parry: Master to be purchased first. Each purchase requires an additional Weapon Group Specialization. Functions identically to Slay/Parry: Master for an entire Weapon Group.'}),
     skill('Specialization +1: Weapon Group',  [120,140,150,170,150,170,250,200,250],[], {_weaponChoice:'group', desc:'This skill grants the player a +1 damage bonus with any weapon from a chosen Weapon Group that the character is proficient in, selected at purchase. This skill cannot be purchased for the Exotic weapon group.'}),
     skill('Specialization +1: Weapon Specific',[100,120,130,150,130,150,230,180,230],[], {_weaponChoice:'specific', desc:'This skill grants the player a +1 damage bonus with a single weapon that the character is proficient in, chosen at purchase. If purchased for Summoned Weapons it will apply to all Summoned Weapons within an individual sphere.'}),
-    skill('Weapon Group Proficiency: Medium',  [40,40,40,50,50,50,80,80,80],  [], {max:1, desc:'This skill allows the player to properly wield the following one-handed weapons: Bow, Sword, Mace, Spears, Battle Axe, and any other non-Exotic weapon with a base damage of 2. Bows do Body damage.'}),
-    skill('Weapon Group Proficiency: Large',   [70,70,70,100,100,100,130,130,130],[], {max:1, desc:'This skill allows the player to properly wield the following two-handed weapons: Crossbow, Sword, Axe, Mace, Pole Arm, and any other non-Exotic weapon with a base damage of 4. Bonus damage from Strength will be applied to Large Weapon swings at a rate of +1 damage for every 1 point of Strength, rather than the standard +1 damage for every 2 points. Strength bonuses will not increase Crossbow damage. Crossbows do Body damage.'}),
-    skill('Weapon Specific Proficiency: Exotic',[100,100,100,130,130,130,150,150,150],[], {max:4, _weaponChoice:'exotic', desc:'This skill allows the player to properly wield one of the following weapons: Stiletto (1 Body damage), two-handed Maul (5 damage), Bastard Sword (2 damage if wielded in one hand or 4 damage if wielded in both hands), or any other weapon that does Body damage or is summoned through magical means. Bonus damage from Strength will be applied to Maul swings at a rate of +1 damage for every 1 point of Strength, rather than the standard +1 damage for every 2 points. This skill can be purchased multiple times to allow a character to become proficient in multiple Exotic Weapons.'}),
+    skill('Weapon Group Proficiency: Medium',  [40,40,40,50,50,50,80,80,80],  [], {max:1, desc:"This skill allows the player to properly wield the following one-handed weapons: Bow, Sword, Mace, Spears, Battle Axe, and any other non-Exotic weapon with a base damage of 2. Bows do Body damage. Note for Am'Rath: due to the Simple Weapon Restriction racial ability, purchasing this proficiency only grants use of the Bow. All other medium weapons are treated as exotic and must be purchased through Exotic Proficiency."}),
+    skill('Weapon Group Proficiency: Large',   [70,70,70,100,100,100,130,130,130],[], {max:1, desc:"This skill allows the player to properly wield the following two-handed weapons: Crossbow, Sword, Axe, Mace, Pole Arm, and any other non-Exotic weapon with a base damage of 4. Bonus damage from Strength will be applied to Large Weapon swings at a rate of +1 damage for every 1 point of Strength, rather than the standard +1 damage for every 2 points. Strength bonuses will not increase Crossbow damage. Crossbows do Body damage. Note for Am'Rath: due to the Simple Weapon Restriction racial ability, purchasing this proficiency only grants use of the Crossbow. All other large weapons are treated as exotic and must be purchased through Exotic Proficiency."}),
+    skill('Weapon Specific Proficiency: Exotic',[100,100,100,130,130,130,150,150,150],[], {max:13, _weaponChoice:'exotic', desc:"This skill allows the player to properly wield one of the following weapons: Stiletto (1 Body damage), two-handed Maul (5 damage), Bastard Sword (2 damage if wielded in one hand or 4 damage if wielded in both hands), or any other weapon that does Body damage or is summoned through magical means. Bonus damage from Strength will be applied to Maul swings at a rate of +1 damage for every 1 point of Strength, rather than the standard +1 damage for every 2 points. This skill can be purchased multiple times to allow a character to become proficient in multiple Exotic Weapons. For Am'Rath, all non-simple melee weapons are considered exotic and may be purchased through this skill."}),
     skill('Weapon Refocus',                    [40,40,40,40,40,40,40,40,40],  [], {desc:'This skill allows the player to revisit their local training ground and upgrade their Weapon Specific Specialization +1 or Critical +2 or Slay/Parry to a Group Specialization +1 or Critical +2 or Slay/Parry: Master. This skill may only be used as an upgrade, not to downgrade a Group skill to a Weapon Specific skill.'}),
   ]},
   {cat:'Rogue', skills:[
@@ -3200,6 +3227,17 @@ function getBlockReason(sk, ignoreMax){
     const skillPurchases = s.owned.filter(o=>o._elementalAttunement).length;
     if(skillPurchases >= 3) return 'maxed';
     if(s.elementalAttunements.length >= 4) return 'maxed'; // all 4 elements already attuned
+  }
+
+  // Weapon Specific Proficiency: Exotic — dynamic max based on race
+  if(sk.name === 'Weapon Specific Proficiency: Exotic'){
+    const pool = isAmRath() ? AMRATH_EXOTIC_POOL : WEAPON_TYPES.exotic;
+    const alreadyOwned = s.owned
+      .filter(o=>(o._baseSkillName||o.name)==='Weapon Specific Proficiency: Exotic' && o._weaponType)
+      .map(o=>o._weaponType);
+    const remaining = pool.filter(w=>!alreadyOwned.includes(w));
+    const hardCap = isAmRath() ? 10 : 4;
+    if(!ignoreMax && (remaining.length === 0 || alreadyOwned.length >= hardCap)) return 'maxed';
   }
   if(sk._paragon){
     if(s.vocation && FAVOURED_VOCATIONS[s.vocation]) return 'paragon_favoured';
@@ -3651,6 +3689,10 @@ function renderDetail(){
     lockNote = `<div class="detail-lock-note maxed">Maximum purchases reached (${maxP}).</div>`;
   }
 
+  const amrathProfNote = isAmRath() && (sk.name === 'Weapon Group Proficiency: Medium' || sk.name === 'Weapon Group Proficiency: Large')
+    ? `<div style="margin-top:6px;padding:6px 8px;background:var(--color-background-tertiary);border-radius:var(--border-radius-sm);border-left:2px solid var(--color-text-warning);font-size:11px;color:var(--color-text-warning)">Am'Rath: This proficiency only grants the ${sk.name === 'Weapon Group Proficiency: Medium' ? 'Bow' : 'Crossbow'}. All other ${sk.name === 'Weapon Group Proficiency: Medium' ? 'medium' : 'large'} weapons require Exotic Proficiency.</div>`
+    : '';
+
   panel.innerHTML = `
     <div class="detail-name">${sk.name}</div>
     <div class="detail-meta">
@@ -3659,6 +3701,7 @@ function renderDetail(){
       ${sk.occupational?`<span class="tag lvl-req">occupational</span>`:''}
     </div>
     <div class="detail-desc">${sk.desc}</div>
+    ${amrathProfNote}
     <hr class="detail-divider">
     ${sk._spellSlotEntry || sk._ritualSlotEntry
       ? `<div class="detail-stat-row"><span class="detail-stat-lbl">Next cost</span><span class="detail-stat-val">${s.occupation ? (sk._spellSlotEntry ? getSpellSlotNextCost() : getRitualSlotNextCost())+' cp' : 'Select occupation'}</span></div>
