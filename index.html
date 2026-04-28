@@ -5,19 +5,63 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="LARP Builder">
+<meta name="theme-color" content="#1a1a1a">
+<link rel="manifest" id="pwa-manifest">
+<title>LARP Character Builder</title>
 <script>
-  // Unregister any service workers and clear all caches on load
+  // Inject PWA manifest inline as a blob
+  const manifest = {
+    name: "LARP Character Builder",
+    short_name: "LARP Builder",
+    description: "UW LARP Character Builder — build and print characters for UW LARP.",
+    start_url: "./",
+    display: "standalone",
+    background_color: "#1a1a1a",
+    theme_color: "#1a1a1a",
+    orientation: "portrait-primary",
+    icons: [
+      { src: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' rx='24' fill='%231a1a1a'/%3E%3Ctext x='96' y='130' font-size='100' text-anchor='middle' fill='%23c9a84c'%3E%E2%9C%A6%3C/text%3E%3C/svg%3E", sizes: "192x192", type: "image/svg+xml" },
+      { src: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='64' fill='%231a1a1a'/%3E%3Ctext x='256' y='350' font-size='280' text-anchor='middle' fill='%23c9a84c'%3E%E2%9C%A6%3C/text%3E%3C/svg%3E", sizes: "512x512", type: "image/svg+xml" }
+    ]
+  };
+  const manifestBlob = new Blob([JSON.stringify(manifest)], {type:'application/json'});
+  document.getElementById('pwa-manifest').href = URL.createObjectURL(manifestBlob);
+
+  // Register service worker for offline support
   if('serviceWorker' in navigator){
-    navigator.serviceWorker.getRegistrations().then(regs=>{
-      regs.forEach(r=>r.unregister());
-    });
+    navigator.serviceWorker.getRegistrations().then(regs=>regs.forEach(r=>r.unregister()));
+    const swCode = `
+const CACHE = 'larp-builder-v1';
+self.addEventListener('install', e => {
+  e.waitUntil(caches.open(CACHE).then(c => c.addAll([self.location.pathname])));
+  self.skipWaiting();
+});
+self.addEventListener('activate', e => {
+  e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));
+  self.clients.claim();
+});
+self.addEventListener('fetch', e => {
+  e.respondWith(caches.match(e.request).then(r => r || fetch(e.request).then(res => {
+    const clone = res.clone();
+    caches.open(CACHE).then(c => c.put(e.request, clone));
+    return res;
+  })));
+});`;
+    const swBlob = new Blob([swCode], {type:'application/javascript'});
+    const swUrl = URL.createObjectURL(swBlob);
+    navigator.serviceWorker.register(swUrl, {scope: './'}).catch(()=>{});
   }
+
+  // Clear old caches
   if('caches' in window){
     caches.keys().then(keys=>keys.forEach(k=>caches.delete(k)));
   }
 </script>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>LARP Character Builder</title>
 <style>
   :root {
     --color-text-primary: #1a1a1a;
@@ -111,7 +155,9 @@
   /* Skills section */
   .skills-page { display: flex; flex-direction: column; gap: 0.75rem; }
   .page-title { font-size: 11px; font-weight: 500; letter-spacing: 1.5px; text-transform: uppercase; color: var(--color-text-secondary); margin-bottom: 0.75rem; }
-  .skills-layout { display: flex; flex-direction: column; gap: 0.75rem; }
+  .skills-layout { display: grid; grid-template-columns: 300px 1fr; gap: 0.75rem; align-items: start; }
+  .skills-detail-col { position: sticky; top: 1rem; align-self: start; }
+  .skills-list-col { min-width: 0; }
   .detail-panel { border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-lg); padding: 1.25rem; background: var(--color-background-primary); }
   .skill-categories { display: flex; flex-direction: column; gap: 0.75rem; }
   .skill-category-block { border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-lg); overflow: hidden; }
@@ -144,7 +190,7 @@
   .btn-sm:disabled { opacity: 0.3; cursor: not-allowed; pointer-events: none; }
 
   /* Detail panel */
-  .detail-panel { border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-lg); padding: 1.25rem; background: var(--color-background-primary); position: sticky; top: 1.5rem; align-self: start; max-height: 82vh; overflow-y: auto; }
+  .detail-panel { border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-lg); padding: 1.25rem; background: var(--color-background-primary); max-height: 82vh; overflow-y: auto; }
   .detail-empty { font-size: 13px; color: var(--color-text-tertiary); font-style: italic; text-align: center; padding: 2rem 0; }
   .detail-name { font-size: 16px; font-weight: 500; margin-bottom: 6px; }
   .detail-meta { display: flex; gap: 6px; margin-bottom: 0.875rem; flex-wrap: wrap; }
@@ -218,7 +264,7 @@
     .summary-top { grid-template-columns: 1fr; }
     .summary-left { border-right: none; border-bottom: 0.5px solid var(--color-border-tertiary); }
     .skills-layout { grid-template-columns: 1fr; }
-    .detail-panel { position: static; }
+    .skills-detail-col { position: static; }
     .magic-levels-row { flex-wrap: wrap; }
     .magic-level-card { min-width: 60px; }
   }
@@ -330,9 +376,13 @@
 <!-- Skills section -->
 <div class="skills-page">
   <div class="page-title">Skills</div>
-  <div class="detail-panel" id="detail-panel" style="margin-bottom:0.75rem"><div class="detail-empty">Hover a skill to see details</div></div>
   <div class="skills-layout">
-    <div class="skill-categories" id="skill-cats"></div>
+    <div class="skills-detail-col">
+      <div class="detail-panel" id="detail-panel"><div class="detail-empty">Hover a skill to see details</div></div>
+    </div>
+    <div class="skills-list-col">
+      <div class="skill-categories" id="skill-cats"></div>
+    </div>
   </div>
 </div>
 
@@ -2713,7 +2763,7 @@ const SKILLS = [
     // Subsequent: requires primary purchased once (not per purchase), then same prereqs as primary per purchase
     skill('Slay/Parry: Subsequent',           [100,120,130,170,150,170,250,200,250],[{name:'Slay/Parry',minCount:1,primaryGate:true},{name:'Specialization +1: Weapon Group|Specialization +1: Weapon Specific',minCount:1}], {max:9, prereqPerPurchase:true, _weaponChoice:'specific', desc:'Requires Slay/Parry to be purchased first. Each purchase requires an additional Weapon Specialization (Group or Specific). Functions identically to Slay/Parry for a single weapon the character is proficient in, chosen at purchase.'}),
     skill('Slay/Parry: Master Subsequent',    [120,140,150,190,170,190,270,220,270],[{name:'Slay/Parry: Master',minCount:1,primaryGate:true},{name:'Specialization +1: Weapon Group',minCount:1}], {max:9, prereqPerPurchase:true, _weaponChoice:'group', desc:'Requires Slay/Parry: Master to be purchased first. Each purchase requires an additional Weapon Group Specialization. Functions identically to Slay/Parry: Master for an entire Weapon Group.'}),
-    skill('Specialization +1: Weapon Group',  [120,140,150,170,150,170,250,200,250],[{name:'Weapon Group Proficiency: Medium|Weapon Group Proficiency: Large|Weapon Specific Proficiency: Exotic',minCount:1}], {_weaponChoice:'group', desc:'This skill grants the player a +1 damage bonus with any weapon from a chosen Weapon Group that the character is proficient in, selected at purchase. This skill cannot be purchased for the Exotic weapon group.'}),
+    skill('Specialization +1: Weapon Group',  [120,140,150,170,150,170,250,200,250],[], {_weaponChoice:'group', desc:'This skill grants the player a +1 damage bonus with any weapon from a chosen Weapon Group that the character is proficient in, selected at purchase. This skill cannot be purchased for the Exotic weapon group.'}),
     skill('Specialization +1: Weapon Specific',[100,120,130,150,130,150,230,180,230],[{name:'Weapon Group Proficiency: Medium|Weapon Group Proficiency: Large|Weapon Specific Proficiency: Exotic',minCount:1}], {_weaponChoice:'specific', desc:'This skill grants the player a +1 damage bonus with a single weapon that the character is proficient in, chosen at purchase. If purchased for Summoned Weapons it will apply to all Summoned Weapons within an individual sphere.'}),
     skill('Weapon Group Proficiency: Medium',  [40,40,40,50,50,50,80,80,80],  [], {max:1, desc:'This skill allows the player to properly wield the following one-handed weapons: Bow, Sword, Mace, Spears, Battle Axe, and any other non-Exotic weapon with a base damage of 2. Bows do Body damage.'}),
     skill('Weapon Group Proficiency: Large',   [70,70,70,100,100,100,130,130,130],[], {max:1, desc:'This skill allows the player to properly wield the following two-handed weapons: Crossbow, Sword, Axe, Mace, Pole Arm, and any other non-Exotic weapon with a base damage of 4. Bonus damage from Strength will be applied to Large Weapon swings at a rate of +1 damage for every 1 point of Strength, rather than the standard +1 damage for every 2 points. Strength bonuses will not increase Crossbow damage. Crossbows do Body damage.'}),
