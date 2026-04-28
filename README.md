@@ -267,6 +267,16 @@ self.addEventListener('fetch', e => {
     .skills-detail-col { position: static; }
     .magic-levels-row { flex-wrap: wrap; }
     .magic-level-card { min-width: 60px; }
+    /* Spell builder mobile */
+    .sb-body-wrap { flex-direction: column !important; }
+    .sb-desc-panel { width: 100% !important; position: static !important; min-height: unset !important; }
+    .sb-header-btns { flex-wrap: wrap; gap: 6px !important; }
+    #spell-builder-overlay { padding: 0 !important; align-items: stretch !important; }
+    #spell-builder-overlay > div { border-radius: 0 !important; max-width: 100% !important; height: 100%; display: flex; flex-direction: column; }
+    .sb-content-scroll { flex: 1; overflow-y: auto; }
+    .sb-header { position: sticky; top: 0; z-index: 10; }
+    .sb-spheres-bar { position: sticky; top: 0; z-index: 9; }
+    #sb-incant-th, #sb-incant-col { display: none !important; }
   }
 @media print {
   body > * { display: none !important; }
@@ -442,62 +452,60 @@ self.addEventListener('fetch', e => {
   <div style="background:var(--color-background-primary);border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-lg);width:100%;max-width:900px;margin:0 auto;overflow:hidden">
 
     <!-- Header -->
-    <div style="display:flex;align-items:center;justify-content:space-between;padding:1rem 1.25rem;border-bottom:0.5px solid var(--color-border-secondary);background:var(--color-background-secondary)">
+    <div class="sb-header" style="display:flex;align-items:center;justify-content:space-between;padding:0.75rem 1rem;border-bottom:0.5px solid var(--color-border-secondary);background:var(--color-background-secondary);flex-wrap:wrap;gap:8px">
       <div>
         <div style="font-size:15px;font-weight:600;color:var(--color-text-primary)">✦ Spell List Builder</div>
         <div style="font-size:11px;color:var(--color-text-tertiary);margin-top:2px">Assign spells to your memorised slots</div>
       </div>
-      <div style="display:flex;gap:8px;align-items:center">
-        <button onclick="sbToggleIncants()" id="sb-incant-btn" style="padding:5px 12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-tertiary);color:var(--color-text-secondary);font-family:var(--font-sans);font-size:11px;cursor:pointer">📜 Show Incantations</button>
-        <button onclick="sbPrintSummary()" style="padding:5px 12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-tertiary);color:var(--color-text-secondary);font-family:var(--font-sans);font-size:11px;cursor:pointer">🖨 Print Spell List</button>
+      <div class="sb-header-btns" style="display:flex;gap:8px;align-items:center">
+        <button onclick="sbToggleIncants()" id="sb-incant-btn" style="padding:5px 10px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-tertiary);color:var(--color-text-secondary);font-family:var(--font-sans);font-size:11px;cursor:pointer">📜 Incantations</button>
+        <button onclick="sbPrintSummary()" style="padding:5px 10px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-tertiary);color:var(--color-text-secondary);font-family:var(--font-sans);font-size:11px;cursor:pointer">🖨 Print</button>
         <button onclick="closeSpellBuilder()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--color-text-tertiary);padding:2px 6px;line-height:1">✕</button>
       </div>
     </div>
 
-    <!-- Spheres row (read-only from character) -->
-    <div id="sb-spheres-bar" style="padding:10px 1.25rem;border-bottom:0.5px solid var(--color-border-tertiary);background:var(--color-background-secondary);display:flex;gap:12px;flex-wrap:wrap;align-items:center">
-      <span style="font-size:11px;color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:0.5px">Active Spheres:</span>
+    <!-- Spheres row -->
+    <div class="sb-spheres-bar" id="sb-spheres-bar" style="padding:8px 1rem;border-bottom:0.5px solid var(--color-border-tertiary);background:var(--color-background-secondary);display:flex;gap:12px;flex-wrap:wrap;align-items:center">
+      <span style="font-size:11px;color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:0.5px">Spheres:</span>
       <span id="sb-spheres-display" style="font-size:12px;color:var(--color-text-secondary);font-style:italic">None selected</span>
     </div>
 
-    <!-- Body: two-column layout -->
-    <div style="padding:1rem 1.25rem;display:flex;gap:1rem;align-items:flex-start">
+    <!-- Body: two-column on desktop, stacked on mobile -->
+    <div class="sb-content-scroll">
+      <div class="sb-body-wrap" style="padding:1rem;display:flex;gap:1rem;align-items:flex-start">
 
-      <!-- Table column -->
-      <div style="flex:1;min-width:0">
-      <div id="sb-no-sphere" style="display:none;text-align:center;padding:2rem;color:var(--color-text-tertiary);font-size:13px;font-style:italic">
-        No spheres of magic selected on your character. Purchase a Sphere of Magic in the Magic section first.
+        <!-- Table column -->
+        <div style="flex:1;min-width:0">
+          <div id="sb-no-sphere" style="display:none;text-align:center;padding:2rem;color:var(--color-text-tertiary);font-size:13px;font-style:italic">
+            No spheres of magic selected. Purchase a Sphere of Magic first.
+          </div>
+          <div id="sb-summary" style="display:none;margin-bottom:1rem">
+            <div style="font-size:11px;font-weight:600;color:var(--color-text-secondary);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Spell Summary</div>
+            <div id="sb-summary-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px"></div>
+          </div>
+          <div id="sb-table-wrap" style="border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);overflow:hidden">
+            <table id="sb-table" style="width:100%;border-collapse:collapse">
+              <thead>
+                <tr style="background:var(--color-background-secondary)">
+                  <th style="padding:8px;font-size:11px;font-weight:600;color:var(--color-text-secondary);text-transform:uppercase;letter-spacing:0.5px;text-align:center;width:52px">Lvl</th>
+                  <th style="padding:8px;font-size:11px;font-weight:600;color:var(--color-text-secondary);text-transform:uppercase;letter-spacing:0.5px;text-align:center;width:42px">#</th>
+                  <th style="padding:8px;font-size:11px;font-weight:600;color:var(--color-text-secondary);text-transform:uppercase;letter-spacing:0.5px;text-align:left">Spell</th>
+                  <th id="sb-incant-th" style="padding:8px;font-size:11px;font-weight:600;color:var(--color-text-secondary);text-transform:uppercase;letter-spacing:0.5px;text-align:left;display:none">Incantation</th>
+                </tr>
+              </thead>
+              <tbody id="sb-body"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Description panel -->
+        <div class="sb-desc-panel" id="sb-desc-panel" style="width:260px;flex-shrink:0;position:sticky;top:0;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);padding:12px;font-size:12px;line-height:1.6;min-height:160px">
+          <div style="font-size:11px;font-weight:600;color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Spell Details</div>
+          <div id="sb-desc-content" style="color:var(--color-text-tertiary);font-style:italic;font-size:12px">Select a spell to see its description.</div>
+        </div>
+
       </div>
-
-      <!-- Summary -->
-      <div id="sb-summary" style="display:none;margin-bottom:1rem">
-        <div style="font-size:11px;font-weight:600;color:var(--color-text-secondary);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Spell Summary</div>
-        <div id="sb-summary-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:8px"></div>
-      </div>
-
-      <!-- Table -->
-      <div id="sb-table-wrap" style="border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);overflow:hidden">
-        <table id="sb-table" style="width:100%;border-collapse:collapse">
-          <thead>
-            <tr style="background:var(--color-background-secondary)">
-              <th style="padding:8px 12px;font-size:11px;font-weight:600;color:var(--color-text-secondary);text-transform:uppercase;letter-spacing:0.5px;text-align:center;width:70px">Level</th>
-              <th style="padding:8px 12px;font-size:11px;font-weight:600;color:var(--color-text-secondary);text-transform:uppercase;letter-spacing:0.5px;text-align:center;width:55px">Slot</th>
-              <th style="padding:8px 12px;font-size:11px;font-weight:600;color:var(--color-text-secondary);text-transform:uppercase;letter-spacing:0.5px;text-align:left">Spell</th>
-              <th id="sb-incant-th" style="padding:8px 12px;font-size:11px;font-weight:600;color:var(--color-text-secondary);text-transform:uppercase;letter-spacing:0.5px;text-align:left;display:none">Incantation</th>
-            </tr>
-          </thead>
-          <tbody id="sb-body"></tbody>
-        </table>
-      </div>
-      </div><!-- end table column -->
-
-      <!-- Description panel -->
-      <div id="sb-desc-panel" style="width:260px;flex-shrink:0;position:sticky;top:0;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);padding:12px;font-size:12px;line-height:1.6;min-height:200px">
-        <div style="font-size:11px;font-weight:600;color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Spell Details</div>
-        <div id="sb-desc-content" style="color:var(--color-text-tertiary);font-style:italic;font-size:12px">Select a spell from the table to see its description and incantation.</div>
-      </div>
-
-    </div><!-- end body -->
+    </div><!-- end sb-content-scroll -->
   </div>
 </div>
 
