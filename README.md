@@ -4114,14 +4114,24 @@ function buildSummaryHTML(){
   }
 
   // ---- Skills by category ----
-  const skillCats = ['General','Production','Scholar','Warrior','Rogue'];
+  const skillCats = [
+    'General','Production','Scholar','Warrior','Rogue',
+    'Warrior Class Frag Skills','Rogue Class Frag Skills',
+    'Scholar Class Frag Skills','Frag Skills',
+  ];
+  const fragCatLabels = {
+    'Warrior Class Frag Skills': 'Warrior Frag Skills',
+    'Rogue Class Frag Skills':   'Rogue Frag Skills',
+    'Scholar Class Frag Skills': 'Scholar Frag Skills',
+    'Frag Skills':               'General Frag Skills',
+  };
   let skillsHTML = '';
   skillCats.forEach(cat=>{
     const catOwned = s.owned.filter(o=>!o._auto && !o._racial && !o._vocationAbility && !o._favouredUnlock && !o._spellSlot && !o._ritualSlot && !o._spherePurchase && (o._cat===cat || (!o._cat && cat==='General')));
     if(!catOwned.length) return;
     const grouped = {};
     catOwned.forEach(o=>{ grouped[o.name]=(grouped[o.name]||0)+1; });
-    skillsHTML += sec(cat + ' Skills', Object.entries(grouped).map(([name,count])=>
+    skillsHTML += sec((fragCatLabels[cat] || cat) + ' Skills', Object.entries(grouped).map(([name,count])=>
       `<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:0.5px solid var(--color-border-tertiary);font-size:13px">
         <span>${name}</span>
         ${count>1?`<span style="color:var(--color-text-tertiary);font-size:11px">×${count}</span>`:''}
