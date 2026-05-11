@@ -116,6 +116,17 @@ self.addEventListener('fetch', e => {
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: var(--font-sans); font-size: 15px; color: var(--color-text-primary); background: var(--color-background-secondary); padding: 1.5rem; min-height: 100vh; }
   .app { max-width: 960px; margin: 0 auto; padding-bottom: 3rem; }
+  /* PWA Install Banner */
+  #pwa-bar { display:none; align-items:center; justify-content:space-between; gap:10px;
+    background:var(--color-background-info); border:0.5px solid var(--color-border-info);
+    border-radius:var(--border-radius-md); padding:10px 14px; margin-bottom:1rem; }
+  #pwa-bar.show { display:flex; }
+  #pwa-bar p { font-size:13px; color:var(--color-text-info); margin:0; flex:1; }
+  #pwa-install-btn { padding:5px 14px; border:0.5px solid var(--color-border-info);
+    border-radius:var(--border-radius-md); background:var(--color-text-info); color:#fff;
+    font-family:var(--font-sans); font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap; }
+  #pwa-dismiss { background:none; border:none; font-size:20px; color:var(--color-text-info);
+    cursor:pointer; padding:0 2px; line-height:1; }
 
   /* Summary panel */
   .summary-panel { border: 0.5px solid var(--color-border-secondary); border-radius: var(--border-radius-lg); background: var(--color-background-primary); margin-bottom: 1.5rem; overflow: hidden; }
@@ -288,6 +299,11 @@ self.addEventListener('fetch', e => {
 </head>
 <body>
 <div class="app">
+  <div id="pwa-bar">
+    <p>&#128241; Install UW Character Builder for offline use.</p>
+    <button id="pwa-install-btn" onclick="pwaInstall()">Install App</button>
+    <button id="pwa-dismiss" onclick="pwaDismiss()" title="Dismiss">&times;</button>
+  </div>
 
 <!-- Bug report button -->
 <div style="position:fixed;top:12px;right:12px;z-index:1000">
@@ -5061,6 +5077,42 @@ function resetCharacter(){
       render();
     }
   );
+}
+
+// ── PWA Install Prompt ──
+var _pwaPrompt = null;
+
+window.addEventListener('beforeinstallprompt', function(e) {
+  e.preventDefault();
+  _pwaPrompt = e;
+  if (!sessionStorage.getItem('pwa-dismissed')) {
+    var bar = document.getElementById('pwa-bar');
+    if (bar) bar.classList.add('show');
+  }
+});
+
+window.addEventListener('appinstalled', function() {
+  var bar = document.getElementById('pwa-bar');
+  if (bar) bar.classList.remove('show');
+  _pwaPrompt = null;
+});
+
+function pwaInstall() {
+  if (_pwaPrompt) {
+    _pwaPrompt.prompt();
+    _pwaPrompt.userChoice.then(function(r) {
+      if (r.outcome === 'accepted') pwaDismiss();
+      _pwaPrompt = null;
+    });
+  } else {
+    alert('To install: in Chrome, tap the menu (⋮) then "Add to Home Screen", or look for an install icon in the address bar.');
+  }
+}
+
+function pwaDismiss() {
+  var bar = document.getElementById('pwa-bar');
+  if (bar) bar.classList.remove('show');
+  sessionStorage.setItem('pwa-dismissed', '1');
 }
 
 render();
