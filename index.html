@@ -1829,6 +1829,7 @@ function renderMagicLevels(){
     <div class="magic-level-cost">${hasRitualPrereq&&s.occupation ? nextRitualCost+'cp' : '—'}</div>
     <div class="magic-level-btns">
       <span class="magic-level-count">${ritualCount}/10</span>
+      <button class="btn-sm minus" onclick="removeRitualSlot()" ${ritualCount===0?'disabled':''}>−</button>
       <button class="btn-sm" onclick="addRitualSlot()" ${ritualDone||ritualLocked||!s.occupation?'disabled':''}>+</button>
     </div>
     ${ritualLockNote}
